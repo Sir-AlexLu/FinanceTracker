@@ -1,5 +1,11 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { JWTPayload } from '@/types/auth';
+import { FastifyRequest } from 'fastify';
+
+export interface JWTPayload {
+  id: string;
+  username: string;
+  iat: number;
+  exp: number;
+}
 
 export const generateTokens = (user: { id: string; username: string }) => {
   const payload = {
