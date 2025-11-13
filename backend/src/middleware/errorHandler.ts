@@ -1,5 +1,5 @@
 import { FastifyError, FastifyRequest, FastifyReply } from 'fastify';
-import { ApiResponse } from '@/types/common';
+import { ApiResponse } from '../types/common';
 
 export const errorHandler = (
   error: FastifyError,
