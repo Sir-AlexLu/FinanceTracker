@@ -1,6 +1,6 @@
-import Transaction from '@/models/Transaction';
-import { AnalyticsData } from '@/types/common';
-import { ApiResponse } from '@/types/common';
+import Transaction from '../models/Transaction';
+import { AnalyticsData } from '../types/common';
+import { ApiResponse } from '../types/common';
 
 export class AnalyticsService {
   async getAnalytics(userId: string, params: any): Promise<ApiResponse<AnalyticsData>> {
@@ -66,7 +66,7 @@ export class AnalyticsService {
       const savingsRate = totalIncome > 0 ? (netSavings / totalIncome) * 100 : 0;
 
       // Calculate expenses by category
-      const expensesByCategoryMap = new Map<string, number>();
+      const expensesByCategoryMap = new Map();
       let totalExpenses = 0;
 
       transactions
@@ -91,7 +91,7 @@ export class AnalyticsService {
         .sort((a, b) => b.amount - a.amount);
 
       // Calculate income by category
-      const incomeByCategoryMap = new Map<string, number>();
+      const incomeByCategoryMap = new Map();
       let totalIncomeAmount = 0;
 
       transactions
@@ -116,7 +116,7 @@ export class AnalyticsService {
         .sort((a, b) => b.amount - a.amount);
 
       // Calculate monthly trend (last 6 months)
-      const monthlyTrendMap = new Map<string, { income: number; expense: number; savings: number }>();
+      const monthlyTrendMap = new Map();
       
       for (let i = 5; i >= 0; i--) {
         const month = new Date(now.getFullYear(), now.getMonth() - i, 1);
@@ -130,7 +130,7 @@ export class AnalyticsService {
         const monthKey = month.toLocaleDateString('en-US', { year: 'numeric', month: 'short' });
         
         if (monthlyTrendMap.has(monthKey)) {
-          const monthData = monthlyTrendMap.get(monthKey)!;
+          const monthData = monthlyTrendMap.get(monthKey);
           
           if (transaction.type === 'income') {
             monthData.income += transaction.amount;
@@ -148,7 +148,7 @@ export class AnalyticsService {
       }));
 
       // Calculate cash flow (last 30 days)
-      const cashFlowMap = new Map<string, { inflow: number; outflow: number; netFlow: number }>();
+      const cashFlowMap = new Map();
       
       for (let i = 29; i >= 0; i--) {
         const date = new Date(now);
@@ -168,7 +168,7 @@ export class AnalyticsService {
           const dateKey = new Date(transaction.date).toISOString().split('T')[0];
           
           if (cashFlowMap.has(dateKey)) {
-            const dayData = cashFlowMap.get(dateKey)!;
+            const dayData = cashFlowMap.get(dateKey);
             
             if (transaction.type === 'income') {
               dayData.inflow += transaction.amount;
@@ -204,80 +204,6 @@ export class AnalyticsService {
       return {
         success: false,
         message: error.message || 'Failed to fetch analytics data',
-      };
-    }
-  }
-
-  async getFinancialSummary(userId: string): Promise<ApiResponse<any>> {
-    try {
-      const now = new Date();
-      const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-      const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-
-      // Current month transactions
-      const currentMonthTransactions = await Transaction.find({
-        userId,
-        date: {
-          $gte: currentMonthStart,
-          $lte: now,
-        },
-      });
-
-      // Last month transactions
-      const lastMonthTransactions = await Transaction.find({
-        userId,
-        date: {
-          $gte: lastMonthStart,
-          $lte: lastMonthEnd,
-        },
-      });
-
-      // Calculate totals
-      const calculateTotals = (transactions: any[]) => {
-        let income = 0;
-        let expense = 0;
-        
-        transactions.forEach(t => {
-          if (t.type === 'income') income += t.amount;
-          else if (t.type === 'expense') expense += t.amount;
-        });
-        
-        return { income, expense, savings: income - expense };
-      };
-
-      const currentMonth = calculateTotals(currentMonthTransactions);
-      const lastMonth = calculateTotals(lastMonthTransactions);
-
-      // Calculate changes
-      const incomeChange = lastMonth.income > 0 
-        ? ((currentMonth.income - lastMonth.income) / lastMonth.income) * 100 
-        : 0;
-      
-      const expenseChange = lastMonth.expense > 0 
-        ? ((currentMonth.expense - lastMonth.expense) / lastMonth.expense) * 100 
-        : 0;
-      
-      const savingsChange = lastMonth.savings > 0 
-        ? ((currentMonth.savings - lastMonth.savings) / Math.abs(lastMonth.savings)) * 100 
-        : 0;
-
-      return {
-        success: true,
-        data: {
-          currentMonth,
-          lastMonth,
-          changes: {
-            income: incomeChange,
-            expense: expenseChange,
-            savings: savingsChange,
-          },
-        },
-      };
-    } catch (error: any) {
-      return {
-        success: false,
-        message: error.message || 'Failed to fetch financial summary',
       };
     }
   }
