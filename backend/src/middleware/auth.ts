@@ -1,6 +1,6 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
-import { verifyToken } from '@/utils/jwt';
-import { ApiResponse } from '@/types/common';
+import { verifyToken } from '../utils/jwt';
+import { ApiResponse } from '../types/common';
 
 export const authenticate = async (
   request: FastifyRequest,
@@ -17,7 +17,8 @@ export const authenticate = async (
       } as ApiResponse);
     }
     
-    request.user = user;
+    // Add user to request object
+    (request as any).user = user;
   } catch (err) {
     return reply.status(401).send({
       success: false,
@@ -25,13 +26,3 @@ export const authenticate = async (
     } as ApiResponse);
   }
 };
-
-// Extend FastifyRequest to include user
-declare module 'fastify' {
-  export interface FastifyRequest {
-    user?: {
-      id: string;
-      username: string;
-    };
-  }
-}
