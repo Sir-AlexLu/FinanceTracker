@@ -1,11 +1,18 @@
 import { Account, IAccount } from '../models/Account';
 import { Transaction } from '../models/Transaction';
 import { AuditLog, AuditAction } from '../models/AuditLog';
+import { GoalService } from './goal.service'; // ADDED
 import { AccountType } from '../types/models.types';
 import { DEFAULT_ACCOUNT_NAMES } from '../config/constants';
 import mongoose from 'mongoose';
 
 export class AccountService {
+  private goalService: GoalService; // ADDED
+
+  constructor() {
+    this.goalService = new GoalService(); // ADDED
+  }
+
   /**
    * Create a new account
    */
@@ -238,6 +245,22 @@ export class AccountService {
       account.metadata.lastTransactionAt = new Date();
 
       await account.save();
+
+      // 🔥 NEW: Update goals linked to this account
+      try {
+        const { Goal } = await import('../models/Goal');
+        const goals = await Goal.find({
+          userId: account.userId,
+          linkedAccountId: accountId,
+          status: 'active',
+        });
+
+        for (const goal of goals) {
+          await this.goalService.updateGoalProgress(goal._id.toString());
+        }
+      } catch (error: any) {
+        console.error('Failed to update related goals:', error.message);
+      }
     } catch (error: any) {
       throw new Error(`Failed to update account balance: ${error.message}`);
     }
@@ -325,4 +348,4 @@ export class AccountService {
       throw new Error(`Failed to get accounts summary: ${error.message}`);
     }
   }
-  }
+                                           }
