@@ -4,9 +4,10 @@ services:
     env: node
     region: singapore
     plan: free
-    buildCommand: npm install && npm run build
+    rootDir: backend
+    buildCommand: npm ci && npm run build
     startCommand: npm run start:prod
-    healthCheckPath: /api/health
+    healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
@@ -20,10 +21,8 @@ services:
         value: finance_tracker
       - key: JWT_ACCESS_SECRET
         generateValue: true
-        length: 64
       - key: JWT_REFRESH_SECRET
         generateValue: true
-        length: 64
       - key: JWT_ACCESS_EXPIRES_IN
         value: 15m
       - key: JWT_REFRESH_EXPIRES_IN
@@ -38,7 +37,6 @@ services:
         value: 900000
       - key: ENCRYPTION_KEY
         generateValue: true
-        length: 64
       - key: ENABLE_AUDIT_LOG
         value: true
       - key: ENABLE_CRON_JOBS
