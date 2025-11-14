@@ -2,15 +2,21 @@ import { Transaction, ITransaction } from '../models/Transaction';
 import { Account } from '../models/Account';
 import { AuditLog, AuditAction } from '../models/AuditLog';
 import { AccountService } from './account.service';
-import { TransactionType } from '../types/models.types';
+import { BudgetService } from './budget.service'; // ADD THIS
+import { GoalService } from './goal.service'; // ADD THIS
+import { TransactionType, ExpenseCategory } from '../types/models.types';
 import { formatSettlementPeriod } from '../utils/dateHelpers';
 import mongoose from 'mongoose';
 
 export class TransactionService {
   private accountService: AccountService;
+  private budgetService: BudgetService; // ADD THIS
+  private goalService: GoalService; // ADD THIS
 
   constructor() {
     this.accountService = new AccountService();
+    this.budgetService = new BudgetService(); // ADD THIS
+    this.goalService = new GoalService(); // ADD THIS
   }
 
   /**
@@ -92,6 +98,43 @@ export class TransactionService {
       await this.updateAccountBalances(transaction[0], 'create', session);
 
       await session.commitTransaction();
+
+      // 🔥 NEW: Update budget spending for expense transactions
+      if (
+        transaction[0].type === TransactionType.EXPENSE &&
+        transaction[0].expenseCategory &&
+        !transaction[0].isLiabilityPayment
+      ) {
+        try {
+          await this.budgetService.updateBudgetSpending(
+            userId,
+            transaction[0].expenseCategory as ExpenseCategory,
+            transaction[0].amount,
+            transactionDate
+          );
+        } catch (error: any) {
+          // Log but don't fail transaction if budget update fails
+          console.error('Failed to update budget:', error.message);
+        }
+      }
+
+      // 🔥 NEW: Update goal progress for savings/investment accounts
+      if (
+        transaction[0].type === TransactionType.INCOME ||
+        transaction[0].type === TransactionType.TRANSFER
+      ) {
+        try {
+          // Update goals linked to the affected account
+          await this.updateRelatedGoals(userId, transaction[0].accountId.toString());
+          
+          if (transaction[0].destinationAccountId) {
+            await this.updateRelatedGoals(userId, transaction[0].destinationAccountId.toString());
+          }
+        } catch (error: any) {
+          // Log but don't fail transaction if goal update fails
+          console.error('Failed to update goals:', error.message);
+        }
+      }
 
       // Audit log
       await AuditLog.log({
@@ -186,6 +229,29 @@ export class TransactionService {
           { session }
         );
         break;
+    }
+  }
+
+  /**
+   * 🔥 NEW: Update goals related to an account
+   */
+  private async updateRelatedGoals(userId: string, accountId: string): Promise<void> {
+    try {
+      const { Goal } = await import('../models/Goal');
+      
+      // Find goals linked to this account
+      const goals = await Goal.find({
+        userId,
+        linkedAccountId: accountId,
+        status: 'active',
+      });
+
+      // Update each goal's progress
+      for (const goal of goals) {
+        await this.goalService.updateGoalProgress(goal._id.toString());
+      }
+    } catch (error: any) {
+      console.error('Failed to update related goals:', error.message);
     }
   }
 
@@ -300,6 +366,9 @@ export class TransactionService {
         throw new Error('Cannot update a settled transaction');
       }
 
+      const oldAmount = transaction.amount;
+      const oldCategory = transaction.expenseCategory;
+
       // If amount changed, revert old balance and apply new
       if (data.amount && data.amount !== transaction.amount) {
         // Revert old transaction
@@ -324,6 +393,46 @@ export class TransactionService {
       await transaction.save({ session });
 
       await session.commitTransaction();
+
+      // 🔥 NEW: Update budget if expense amount changed
+      if (
+        transaction.type === TransactionType.EXPENSE &&
+        transaction.expenseCategory &&
+        !transaction.isLiabilityPayment &&
+        data.amount
+      ) {
+        try {
+          // Revert old amount
+          await this.budgetService.updateBudgetSpending(
+            userId,
+            transaction.expenseCategory as ExpenseCategory,
+            -oldAmount,
+            transaction.date
+          );
+          
+          // Add new amount
+          await this.budgetService.updateBudgetSpending(
+            userId,
+            transaction.expenseCategory as ExpenseCategory,
+            transaction.amount,
+            transaction.date
+          );
+        } catch (error: any) {
+          console.error('Failed to update budget:', error.message);
+        }
+      }
+
+      // 🔥 NEW: Update goals if amount changed
+      if (data.amount) {
+        try {
+          await this.updateRelatedGoals(userId, transaction.accountId.toString());
+          if (transaction.destinationAccountId) {
+            await this.updateRelatedGoals(userId, transaction.destinationAccountId.toString());
+          }
+        } catch (error: any) {
+          console.error('Failed to update goals:', error.message);
+        }
+      }
 
       // Audit log
       await AuditLog.log({
@@ -382,6 +491,34 @@ export class TransactionService {
       await Transaction.findByIdAndDelete(transactionId).session(session);
 
       await session.commitTransaction();
+
+      // 🔥 NEW: Update budget if expense deleted
+      if (
+        transaction.type === TransactionType.EXPENSE &&
+        transaction.expenseCategory &&
+        !transaction.isLiabilityPayment
+      ) {
+        try {
+          await this.budgetService.updateBudgetSpending(
+            userId,
+            transaction.expenseCategory as ExpenseCategory,
+            -transaction.amount,
+            transaction.date
+          );
+        } catch (error: any) {
+          console.error('Failed to update budget:', error.message);
+        }
+      }
+
+      // 🔥 NEW: Update goals
+      try {
+        await this.updateRelatedGoals(userId, transaction.accountId.toString());
+        if (transaction.destinationAccountId) {
+          await this.updateRelatedGoals(userId, transaction.destinationAccountId.toString());
+        }
+      } catch (error: any) {
+        console.error('Failed to update goals:', error.message);
+      }
 
       // Audit log
       await AuditLog.log({
