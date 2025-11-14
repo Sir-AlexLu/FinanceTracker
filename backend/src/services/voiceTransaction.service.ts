@@ -1,4 +1,4 @@
-import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 import { Account } from '../models/Account';
 import { TransactionService } from './transaction.service';
 import { TransactionType, IncomeCategory, ExpenseCategory } from '../types/models.types';
@@ -218,7 +218,6 @@ export class VoiceTransactionService {
       [ExpenseCategory.OTHER_EXPENSE]: [],
     };
 
-    // Check each category
     for (const [category, keywords] of Object.entries(categoryKeywords)) {
       if (keywords.some((keyword) => text.includes(keyword))) {
         return category as ExpenseCategory;
@@ -262,7 +261,6 @@ export class VoiceTransactionService {
       [IncomeCategory.OTHER_INCOME]: [],
     };
 
-    // Check each category
     for (const [category, keywords] of Object.entries(categoryKeywords)) {
       if (keywords.some((keyword) => text.includes(keyword))) {
         return category as IncomeCategory;
@@ -336,11 +334,7 @@ export class VoiceTransactionService {
    * Calculate confidence score for category inference
    */
   private calculateConfidence(description: string, category: string): number {
-    // Simple keyword matching confidence
-    // In production, this could use ML models
     const text = description.toLowerCase();
-
-    // Get keywords for this category
     let keywords: string[] = [];
 
     if (Object.values(ExpenseCategory).includes(category as ExpenseCategory)) {
@@ -351,10 +345,9 @@ export class VoiceTransactionService {
       keywords = this.getIncomeKeywords(incomeCat);
     }
 
-    // Count matching keywords
     const matches = keywords.filter((keyword) => text.includes(keyword)).length;
 
-    if (matches === 0) return 40; // Default confidence
+    if (matches === 0) return 40;
     if (matches === 1) return 70;
     if (matches >= 2) return 95;
 
@@ -395,13 +388,11 @@ export class VoiceTransactionService {
    * Clean description text
    */
   private cleanDescription(description: string): string {
-    // Remove common words
     const cleaned = description
       .replace(/\b(rupees|rs|inr)\b/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
 
-    // Capitalize first letter
     return cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
   }
 
@@ -415,23 +406,18 @@ export class VoiceTransactionService {
     try {
       let suggestedType: AccountType;
 
-      // Suggest account type based on transaction type
       if (transactionType === TransactionType.INCOME) {
-        // Prefer bank account for income
         suggestedType = AccountType.BANK;
       } else {
-        // Prefer cash for expenses
         suggestedType = AccountType.CASH;
       }
 
-      // Find account of suggested type
       let account = await Account.findOne({
         userId,
         type: suggestedType,
         isActive: true,
-      }).sort({ balance: -1 }); // Highest balance first
+      }).sort({ balance: -1 });
 
-      // If not found, get any active account
       if (!account) {
         account = await Account.findOne({
           userId,
@@ -527,4 +513,4 @@ export class VoiceTransactionService {
       'Paid 200 rupees for lunch',
     ];
   }
-      }
+  }
