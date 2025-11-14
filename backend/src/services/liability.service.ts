@@ -3,15 +3,18 @@ import { Transaction } from '../models/Transaction';
 import { Account } from '../models/Account';
 import { AuditLog, AuditAction } from '../models/AuditLog';
 import { TransactionService } from './transaction.service';
+import { GoalService } from './goal.service'; // ADDED
 import { TransactionType, ExpenseCategory } from '../types/models.types';
 import { formatSettlementPeriod } from '../utils/dateHelpers';
 import mongoose from 'mongoose';
 
 export class LiabilityService {
   private transactionService: TransactionService;
+  private goalService: GoalService; // ADDED
 
   constructor() {
     this.transactionService = new TransactionService();
+    this.goalService = new GoalService(); // ADDED
   }
 
   /**
@@ -194,6 +197,22 @@ export class LiabilityService {
       await liability.save({ session });
 
       await session.commitTransaction();
+
+      // 🔥 NEW: Update goals linked to this liability
+      try {
+        const { Goal } = await import('../models/Goal');
+        const goals = await Goal.find({
+          userId,
+          linkedLiabilityId: liabilityId,
+          status: 'active',
+        });
+
+        for (const goal of goals) {
+          await this.goalService.updateGoalProgress(goal._id.toString());
+        }
+      } catch (error: any) {
+        console.error('Failed to update related goals:', error.message);
+      }
 
       // Audit log
       await AuditLog.log({
@@ -477,4 +496,4 @@ export class LiabilityService {
       throw new Error(`Failed to get liabilities for settlement: ${error.message}`);
     }
   }
-}
+  }
