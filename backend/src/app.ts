@@ -9,6 +9,9 @@ import jwtPlugin from './plugins/jwt';
 import sensiblePlugin from './plugins/sensible';
 import mongoosePlugin from './plugins/mongoose';
 
+// Routes
+import routes from './routes';
+
 export async function buildApp(): Promise<FastifyInstance> {
   const env = getEnv();
 
@@ -36,7 +39,7 @@ export async function buildApp(): Promise<FastifyInstance> {
     keepAliveTimeout: 5000,
   });
 
-  // Register plugins
+  // Register plugins in order
   await fastify.register(sensiblePlugin);
   await fastify.register(corsPlugin);
   await fastify.register(helmetPlugin);
@@ -44,7 +47,10 @@ export async function buildApp(): Promise<FastifyInstance> {
   await fastify.register(jwtPlugin);
   await fastify.register(mongoosePlugin);
 
-  // Health check route
+  // Register all routes (from ./routes/index.ts or similar)
+  await fastify.register(routes);
+
+  // Health check route - critical for monitoring
   fastify.get('/api/health', async () => {
     return {
       status: 'ok',
@@ -61,6 +67,7 @@ export async function buildApp(): Promise<FastifyInstance> {
       version: '1.5.0',
       status: 'running',
       message: 'Welcome to Finance Tracker API',
+      docs: '/documentation',
     };
   });
 
@@ -73,16 +80,22 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  // Error handler
+  // Global error handler
   fastify.setErrorHandler((error, request, reply) => {
     fastify.log.error(error);
 
     const statusCode = error.statusCode || 500;
 
+    // Don't expose internal errors in production
+    const message =
+      env.NODE_ENV === 'production' && statusCode === 500
+        ? 'Internal Server Error'
+        : error.message || 'An unexpected error occurred';
+
     reply.status(statusCode).send({
       statusCode,
-      error: error.name || 'Internal Server Error',
-      message: error.message || 'An unexpected error occurred',
+      error: error.name || 'Error',
+      message,
     });
   });
 
