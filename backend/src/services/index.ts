@@ -8,3 +8,5 @@ export { GoalService } from './goal.service';
 export { SettlementService } from './settlement.service';
 export { AnalyticsService } from './analytics.service';
 export { NotificationService } from './notification.service';
+export { VoiceTransactionService } from './voiceTransaction.service';
+export { RecurringTransactionService } from './recurringTransaction.service';
