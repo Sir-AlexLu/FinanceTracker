@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { Account } from '../models/Account';
 import { TransactionService } from './transaction.service';
 import { TransactionType, IncomeCategory, ExpenseCategory } from '../types/models.types';
