@@ -12,7 +12,6 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Notifications'],
         description: 'Get notifications',
         querystring: {
           type: 'object',
@@ -32,7 +31,6 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     '/unread-count',
     {
       schema: {
-        tags: ['Notifications'],
         description: 'Get unread notification count',
       },
     },
@@ -44,7 +42,6 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Notifications'],
         description: 'Mark notification as read',
       },
     },
@@ -55,7 +52,6 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     '/mark-all-read',
     {
       schema: {
-        tags: ['Notifications'],
         description: 'Mark all notifications as read',
       },
     },
@@ -67,7 +63,6 @@ export default async function notificationRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Notifications'],
         description: 'Delete notification',
       },
     },
