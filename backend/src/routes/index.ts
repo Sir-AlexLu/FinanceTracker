@@ -1,33 +1,38 @@
+// src/routes/index.ts
 import { FastifyInstance } from 'fastify';
-import authRoutes from './auth.routes';
-import accountRoutes from './account.routes';
-import transactionRoutes from './transaction.routes';
-import liabilityRoutes from './liability.routes';
-import billRoutes from './bill.routes';
-import budgetRoutes from './budget.routes';
-import goalRoutes from './goal.routes';
-import settlementRoutes from './settlement.routes';
-import analyticsRoutes from './analytics.routes';
-import notificationRoutes from './notification.routes';
-import voiceTransactionRoutes from './voiceTransaction.routes';
-import recurringTransactionRoutes from './recurringTransaction.routes';
-import healthRoutes from './health.routes';
+import authRoutes from './auth.routes.js';
+import accountRoutes from './account.routes.js';
+import transactionRoutes from './transaction.routes.js';
+import liabilityRoutes from './liability.routes.js';
+import billRoutes from './bill.routes.js';
+import budgetRoutes from './budget.routes.js';
+import goalRoutes from './goal.routes.js';
+import settlementRoutes from './settlement.routes.js';
+import analyticsRoutes from './analytics.routes.js';
+import notificationRoutes from './notification.routes.js';
+import voiceTransactionRoutes from './voiceTransaction.routes.js';
+import recurringTransactionRoutes from './recurringTransaction.routes.js';
+import healthRoutes from './health.routes.js';
 
 export default async function routes(fastify: FastifyInstance) {
-  // Health check (no /api prefix)
-  fastify.register(healthRoutes, { prefix: '/health' });
+  // Public health check
+  fastify.register(healthRoutes);
 
-  // API routes
-  fastify.register(authRoutes, { prefix: '/api/auth' });
-  fastify.register(accountRoutes, { prefix: '/api/accounts' });
-  fastify.register(transactionRoutes, { prefix: '/api/transactions' });
-  fastify.register(liabilityRoutes, { prefix: '/api/liabilities' });
-  fastify.register(billRoutes, { prefix: '/api/bills' });
-  fastify.register(budgetRoutes, { prefix: '/api/budgets' });
-  fastify.register(goalRoutes, { prefix: '/api/goals' });
-  fastify.register(settlementRoutes, { prefix: '/api/settlements' });
-  fastify.register(analyticsRoutes, { prefix: '/api/analytics' });
-  fastify.register(notificationRoutes, { prefix: '/api/notifications' });
-  fastify.register(voiceTransactionRoutes, { prefix: '/api/voice-transactions' });
-  fastify.register(recurringTransactionRoutes, { prefix: '/api/recurring-transactions' });
+  // API v1
+  const api = fastify.register(async (api) => {
+    api.register(authRoutes, { prefix: '/auth' });
+    api.register(accountRoutes, { prefix: '/accounts' });
+    api.register(transactionRoutes, { prefix: '/transactions' });
+    api.register(liabilityRoutes, { prefix: '/liabilities' });
+    api.register(billRoutes, { prefix: '/bills' });
+    api.register(budgetRoutes, { prefix: '/budgets' });
+    api.register(goalRoutes, { prefix: '/goals' });
+    api.register(settlementRoutes, { prefix: '/settlements' });
+    api.register(analyticsRoutes, { prefix: '/analytics' });
+    api.register(notificationRoutes, { prefix: '/notifications' });
+    api.register(voiceTransactionRoutes, { prefix: '/voice-transactions' });
+    api.register(recurringTransactionRoutes, { prefix: '/recurring-transactions' });
+  }, { prefix: '/api' });
+
+  fastify.log.info('All routes registered');
 }
