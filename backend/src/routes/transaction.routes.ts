@@ -17,7 +17,6 @@ export default async function transactionRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: createTransactionSchema,
-        tags: ['Transactions'],
         description: 'Create a new transaction',
       },
     },
@@ -28,7 +27,6 @@ export default async function transactionRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Transactions'],
         description: 'Get transactions with filters',
         querystring: {
           type: 'object',
@@ -51,7 +49,6 @@ export default async function transactionRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Transactions'],
         description: 'Get transaction by ID',
       },
     },
@@ -64,7 +61,6 @@ export default async function transactionRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: updateTransactionSchema,
-        tags: ['Transactions'],
         description: 'Update transaction',
       },
     },
@@ -76,7 +72,6 @@ export default async function transactionRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Transactions'],
         description: 'Delete transaction',
       },
     },
