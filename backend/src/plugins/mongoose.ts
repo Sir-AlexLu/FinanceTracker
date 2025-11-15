@@ -20,8 +20,8 @@ export default fp(async (fastify: FastifyInstance) => {
     fastify.log.info('✅ MongoDB connected successfully');
 
     // Error handling
-    mongoose.connection.on('error', (err) => {
-      fastify.log.error('❌ MongoDB connection error:', err);
+    mongoose.connection.on('error', (err: Error) => {
+      fastify.log.error({ err }, '❌ MongoDB connection error');
     });
 
     mongoose.connection.on('disconnected', () => {
@@ -34,7 +34,8 @@ export default fp(async (fastify: FastifyInstance) => {
       fastify.log.info('🔌 MongoDB connection closed');
     });
   } catch (error) {
-    fastify.log.error('❌ MongoDB connection failed:', error);
+    const err = error instanceof Error ? error : new Error(String(error));
+    fastify.log.error({ err }, '❌ MongoDB connection failed');
     process.exit(1);
   }
 });
