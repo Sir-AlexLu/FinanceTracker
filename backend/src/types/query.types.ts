@@ -50,3 +50,10 @@ export interface TransactionQueryParams {
   page?: string;
   limit?: string;
 }
+
+export interface SettlementQueryParams {
+  month?: string;
+  year?: string;
+  page?: string;
+  limit?: string;
+}
