@@ -1,73 +1,42 @@
+// src/schemas/auth.schema.ts
 import { z } from 'zod';
-import { emailSchema, passwordSchema } from '../utils/validation';
 
-// Register schema
+const email = z.string().email().toLowerCase().trim();
+const password = z.string().min(8).max(100);
+
 export const registerSchema = z.object({
-  email: emailSchema,
-  password: passwordSchema,
-  name: z
-    .string()
-    .min(4, 'Name must be at least 4 characters')
-    .max(50, 'Name cannot exceed 50 characters')
-    .trim(),
-  phoneNumber: z
-    .string()
-    .regex(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
-    .optional(),
+  email,
+  password,
+  name: z.string().min(2).max(50).trim(),
+  phoneNumber: z.string().regex(/^[0-9]{10}$/).optional(),
 });
 
-export type RegisterInput = z.infer<typeof registerSchema>;
-
-// Login schema
 export const loginSchema = z.object({
-  email: emailSchema,
-  password: z.string().min(1, 'Password is required'),
+  email,
+  password: z.string().min(1),
 });
 
-export type LoginInput = z.infer<typeof loginSchema>;
-
-// Refresh token schema
 export const refreshTokenSchema = z.object({
-  refreshToken: z.string().min(1, 'Refresh token is required'),
+  refreshToken: z.string().min(1),
 });
 
-export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
-
-// Change password schema
 export const changePasswordSchema = z.object({
-  currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: passwordSchema,
+  currentPassword: z.string().min(1),
+  newPassword: password,
 });
 
-export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
-
-// Forgot password schema
 export const forgotPasswordSchema = z.object({
-  email: emailSchema,
+  email,
 });
 
-export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
-
-// Reset password schema
 export const resetPasswordSchema = z.object({
-  token: z.string().min(1, 'Reset token is required'),
-  newPassword: passwordSchema,
+  token: z.string().min(1),
+  newPassword: password,
 });
 
-export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
-
-// Update profile schema
 export const updateProfileSchema = z.object({
-  name: z
-    .string()
-    .min(4, 'Name must be at least 4 characters')
-    .max(50, 'Name cannot exceed 50 characters')
-    .trim()
-    .optional(),
-  phoneNumber: z
-    .string()
-    .regex(/^[0-9]{10}$/, 'Phone number must be exactly 10 digits')
-    .optional(),
+  name: z.string().min(2).max(50).trim().optional(),
+  phoneNumber: z.string().regex(/^[0-9]{10}$/).optional(),
   preferences: z
     .object({
       currency: z.enum(['INR']).optional(),
@@ -85,4 +54,10 @@ export const updateProfileSchema = z.object({
     .optional(),
 });
 
+export type RegisterInput = z.infer<typeof registerSchema>;
+export type LoginInput = z.infer<typeof loginSchema>;
+export type RefreshTokenInput = z.infer<typeof refreshTokenSchema>;
+export type ChangePasswordInput = z.infer<typeof changePasswordSchema>;
+export type ForgotPasswordInput = z.infer<typeof forgotPasswordSchema>;
+export type ResetPasswordInput = z.infer<typeof resetPasswordSchema>;
 export type UpdateProfileInput = z.infer<typeof updateProfileSchema>;
