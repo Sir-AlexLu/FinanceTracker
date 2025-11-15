@@ -18,7 +18,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: createLiabilitySchema,
-        tags: ['Liabilities'],
         description: 'Create a new liability',
       },
     },
@@ -29,7 +28,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Liabilities'],
         description: 'Get liabilities with filters',
         querystring: {
           type: 'object',
@@ -48,7 +46,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
     '/summary',
     {
       schema: {
-        tags: ['Liabilities'],
         description: 'Get liability summary',
       },
     },
@@ -60,7 +57,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Liabilities'],
         description: 'Get liability by ID',
       },
     },
@@ -73,7 +69,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: makeLiabilityPaymentSchema,
-        tags: ['Liabilities'],
         description: 'Make a payment towards liability',
       },
     },
@@ -86,7 +81,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: updateLiabilitySchema,
-        tags: ['Liabilities'],
         description: 'Update liability',
       },
     },
@@ -98,7 +92,6 @@ export default async function liabilityRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Liabilities'],
         description: 'Delete liability',
       },
     },
