@@ -16,7 +16,6 @@ export default async function voiceTransactionRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: parseVoiceInputSchema,
-        tags: ['Voice Transactions'],
         description: 'Parse voice input into transaction data',
       },
     },
@@ -28,7 +27,6 @@ export default async function voiceTransactionRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: confirmVoiceTransactionSchema,
-        tags: ['Voice Transactions'],
         description: 'Confirm and create transaction from voice input',
       },
     },
@@ -39,7 +37,6 @@ export default async function voiceTransactionRoutes(fastify: FastifyInstance) {
     '/examples',
     {
       schema: {
-        tags: ['Voice Transactions'],
         description: 'Get voice command examples',
       },
     },
