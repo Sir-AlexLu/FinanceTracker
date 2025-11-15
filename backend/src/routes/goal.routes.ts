@@ -17,7 +17,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: createGoalSchema,
-        tags: ['Goals'],
         description: 'Create a new goal',
       },
     },
@@ -28,7 +27,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Goals'],
         description: 'Get goals with filters',
         querystring: {
           type: 'object',
@@ -48,7 +46,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     '/summary',
     {
       schema: {
-        tags: ['Goals'],
         description: 'Get goal summary',
       },
     },
@@ -60,7 +57,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Goals'],
         description: 'Get goal by ID',
       },
     },
@@ -72,7 +68,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Goals'],
         description: 'Update goal progress',
       },
     },
@@ -85,7 +80,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: updateGoalSchema,
-        tags: ['Goals'],
         description: 'Update goal',
       },
     },
@@ -97,7 +91,6 @@ export default async function goalRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Goals'],
         description: 'Delete goal',
       },
     },
