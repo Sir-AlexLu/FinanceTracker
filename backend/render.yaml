@@ -2,10 +2,10 @@ services:
   - type: web
     name: finance-tracker-api
     env: node
-    region: singapore
+    region: Oregon
     plan: free
     rootDir: backend
-    buildCommand: npm install && npm run build 
+    buildCommand: npm install && npm run build:check
     startCommand: npm run start:prod
     healthCheckPath: /health
     envVars:
@@ -30,16 +30,16 @@ services:
       - key: FRONTEND_URL
         sync: false
       - key: BCRYPT_ROUNDS
-        value: 12
+        value: "12"
       - key: RATE_LIMIT_MAX
-        value: 100
+        value: "100"
       - key: RATE_LIMIT_TIMEWINDOW
-        value: 900000
+        value: "900000"
       - key: ENCRYPTION_KEY
         generateValue: true
       - key: ENABLE_AUDIT_LOG
-        value: true
+        value: "true"
       - key: ENABLE_CRON_JOBS
-        value: true
+        value: "true"
       - key: LOG_LEVEL
         value: info
