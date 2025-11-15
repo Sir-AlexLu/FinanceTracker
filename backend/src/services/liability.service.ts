@@ -239,7 +239,7 @@ export class LiabilityService {
       session.endSession();
     }
   }
-
+  
   /**
    * Get all liabilities for a user
    */
@@ -250,7 +250,7 @@ export class LiabilityService {
       page?: number;
       limit?: number;
     }
-  ): Promise<{ liabilities: ILiability[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{ liabilities: ILiability[]; total: number; page: number; limit: number; totalPages: number }> {
     try {
       const query: any = { userId };
 
@@ -275,6 +275,7 @@ export class LiabilityService {
         liabilities,
         total,
         page,
+        limit,
         totalPages: Math.ceil(total / limit),
       };
     } catch (error: any) {
