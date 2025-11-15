@@ -1,5 +1,14 @@
-import { FastifyRequest } from 'fastify';
-import { z } from 'zod';
+import 'fastify';
+import '@fastify/jwt';
+
+declare module '@fastify/jwt' {
+  interface FastifyJWT {
+    user: {
+      userId: string;
+      email: string;
+    };
+  }
+}
 
 declare module 'fastify' {
   interface FastifyInstance {
@@ -7,7 +16,7 @@ declare module 'fastify' {
   }
 
   interface FastifyRequest {
-    user?: {
+    user: {
       userId: string;
       email: string;
     };
