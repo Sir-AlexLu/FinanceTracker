@@ -1,9 +1,9 @@
+// src/plugins/mongoose.ts
 import fp from 'fastify-plugin';
-import { FastifyInstance } from 'fastify';
 import mongoose from 'mongoose';
-import { getEnv } from '../config/env';
+import { getEnv } from '../config/env.js';
 
-export default fp(async (fastify: FastifyInstance) => {
+export default fp(async (fastify) => {
   const env = getEnv();
 
   try {
@@ -11,31 +11,28 @@ export default fp(async (fastify: FastifyInstance) => {
       dbName: env.MONGODB_DB_NAME,
       maxPoolSize: 10,
       minPoolSize: 2,
-      socketTimeoutMS: 45000,
-      serverSelectionTimeoutMS: 5000,
+      socketTimeoutMS: 45_000,
+      serverSelectionTimeoutMS: 5_000,
       retryWrites: true,
       retryReads: true,
     });
 
-    fastify.log.info('✅ MongoDB connected successfully');
+    fastify.log.info('MongoDB connected');
 
-    // Error handling
-    mongoose.connection.on('error', (err: Error) => {
-      fastify.log.error({ err }, '❌ MongoDB connection error');
+    mongoose.connection.on('error', (err) => {
+      fastify.log.error(err, 'MongoDB error');
     });
 
     mongoose.connection.on('disconnected', () => {
-      fastify.log.warn('⚠️  MongoDB disconnected');
+      fastify.log.warn('MongoDB disconnected');
     });
 
-    // Graceful shutdown
     fastify.addHook('onClose', async () => {
-      await mongoose.connection.close();
-      fastify.log.info('🔌 MongoDB connection closed');
+      await mongoose.disconnect();
+      fastify.log.info('MongoDB disconnected');
     });
-  } catch (error) {
-    const err = error instanceof Error ? error : new Error(String(error));
-    fastify.log.error({ err }, '❌ MongoDB connection failed');
-    process.exit(1);
+  } catch (err) {
+    fastify.log.error(err, 'MongoDB connection failed');
+    throw err;
   }
 });
