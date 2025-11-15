@@ -6,7 +6,6 @@ export default async function healthRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Health'],
         description: 'Health check endpoint',
       },
     },
