@@ -5,6 +5,7 @@ import {
   UpdateBillInput,
   MarkBillAsPaidInput,
 } from '../schemas/bill.schema';
+import { BillQueryParams } from '../types/query.types';
 import { successResponse, errorResponse, paginatedResponse } from '../utils/responseFormatter';
 
 export class BillController {
@@ -22,7 +23,7 @@ export class BillController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -44,7 +45,7 @@ export class BillController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const billId = request.params.id;
 
       const approval = await this.billService.getBillPaymentApproval(userId, billId);
@@ -64,7 +65,7 @@ export class BillController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const billId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -97,11 +98,11 @@ export class BillController {
    * Get bills with filters
    */
   async getBills(
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: BillQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const filters = {
         status: request.query.status,
         startDate: request.query.startDate,
@@ -126,7 +127,7 @@ export class BillController {
    */
   async getUpcomingBills(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const bills = await this.billService.getUpcomingBills(userId);
 
@@ -145,7 +146,7 @@ export class BillController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const billId = request.params.id;
 
       const bill = await this.billService.getBillById(userId, billId);
@@ -165,7 +166,7 @@ export class BillController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const billId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -194,7 +195,7 @@ export class BillController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const billId = request.params.id;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
