@@ -19,7 +19,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: registerSchema,
-        tags: ['Authentication'],
         description: 'Register a new user',
       },
     },
@@ -31,7 +30,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: loginSchema,
-        tags: ['Authentication'],
         description: 'Login user',
       },
       config: {
@@ -49,7 +47,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: refreshTokenSchema,
-        tags: ['Authentication'],
         description: 'Refresh access token',
       },
     },
@@ -61,7 +58,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: forgotPasswordSchema,
-        tags: ['Authentication'],
         description: 'Request password reset',
       },
       config: {
@@ -79,7 +75,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: resetPasswordSchema,
-        tags: ['Authentication'],
         description: 'Reset password with token',
       },
     },
@@ -93,7 +88,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
       onRequest: [fastify.authenticate],
       schema: {
         body: refreshTokenSchema,
-        tags: ['Authentication'],
         description: 'Logout user',
       },
     },
@@ -106,7 +100,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
       onRequest: [fastify.authenticate],
       schema: {
         body: changePasswordSchema,
-        tags: ['Authentication'],
         description: 'Change password',
       },
     },
@@ -118,7 +111,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
     {
       onRequest: [fastify.authenticate],
       schema: {
-        tags: ['Authentication'],
         description: 'Get user profile',
       },
     },
@@ -131,7 +123,6 @@ export default async function authRoutes(fastify: FastifyInstance) {
       onRequest: [fastify.authenticate],
       schema: {
         body: updateProfileSchema,
-        tags: ['Authentication'],
         description: 'Update user profile',
       },
     },
