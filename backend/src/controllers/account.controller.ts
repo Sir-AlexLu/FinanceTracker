@@ -5,6 +5,7 @@ import {
   UpdateAccountInput,
   GetAccountByIdInput,
 } from '../schemas/account.schema';
+import { AccountQueryParams } from '../types/query.types';
 import { successResponse, errorResponse } from '../utils/responseFormatter';
 
 export class AccountController {
@@ -22,7 +23,7 @@ export class AccountController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -45,11 +46,11 @@ export class AccountController {
    * Get all accounts
    */
   async getAccounts(
-    request: FastifyRequest<{ Querystring: { includeInactive?: string } }>,
+    request: FastifyRequest<{ Querystring: AccountQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const includeInactive = request.query.includeInactive === 'true';
 
       const accounts = await this.accountService.getAccounts(userId, includeInactive);
@@ -69,7 +70,7 @@ export class AccountController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const accountId = request.params.id;
 
       const account = await this.accountService.getAccountById(userId, accountId);
@@ -89,7 +90,7 @@ export class AccountController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const accountId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -118,7 +119,7 @@ export class AccountController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const accountId = request.params.id;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -137,7 +138,7 @@ export class AccountController {
    */
   async getAccountsSummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const summary = await this.accountService.getAccountsSummary(userId);
 
