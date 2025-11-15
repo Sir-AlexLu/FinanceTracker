@@ -17,7 +17,6 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: createAccountSchema,
-        tags: ['Accounts'],
         description: 'Create a new account',
       },
     },
@@ -28,7 +27,6 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Accounts'],
         description: 'Get all accounts',
         querystring: {
           type: 'object',
@@ -45,7 +43,6 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     '/summary',
     {
       schema: {
-        tags: ['Accounts'],
         description: 'Get accounts summary',
       },
     },
@@ -57,7 +54,6 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Accounts'],
         description: 'Get account by ID',
       },
     },
@@ -70,7 +66,6 @@ export default async function accountRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: updateAccountSchema,
-        tags: ['Accounts'],
         description: 'Update account',
       },
     },
@@ -82,7 +77,6 @@ export default async function accountRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Accounts'],
         description: 'Delete account',
       },
     },
