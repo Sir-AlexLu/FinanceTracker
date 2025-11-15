@@ -196,7 +196,7 @@ export class BudgetService {
       page?: number;
       limit?: number;
     }
-  ): Promise<{ budgets: IBudget[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{ budgets: IBudget[]; total: number; page: number; limit: number; totalPages: number }> {
     try {
       const query: any = { userId };
 
@@ -221,6 +221,7 @@ export class BudgetService {
         budgets,
         total,
         page,
+        limit,
         totalPages: Math.ceil(total / limit),
       };
     } catch (error: any) {
