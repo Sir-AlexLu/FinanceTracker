@@ -19,7 +19,7 @@ export class RecurringTransactionController {
    */
   async getPendingApprovals(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const pending = await this.recurringTransactionService.checkPendingRecurringTransactions(
         userId
@@ -40,7 +40,7 @@ export class RecurringTransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const { transactionId, modifyAmount } = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -70,7 +70,7 @@ export class RecurringTransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const { transactionId } = request.body;
 
       await this.recurringTransactionService.skipRecurringTransaction(transactionId, userId);
@@ -90,7 +90,7 @@ export class RecurringTransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const { transactionId } = request.body;
 
       await this.recurringTransactionService.cancelRecurringTransaction(transactionId, userId);
@@ -107,7 +107,7 @@ export class RecurringTransactionController {
    */
   async getRecurringTransactions(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const transactions = await this.recurringTransactionService.getRecurringTransactions(
         userId
