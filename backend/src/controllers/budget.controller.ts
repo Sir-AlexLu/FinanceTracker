@@ -5,6 +5,7 @@ import {
   UpdateBudgetInput,
   GetBudgetsQuery,
 } from '../schemas/budget.schema';
+import { BudgetQueryParams } from '../types/query.types';
 import { successResponse, errorResponse, paginatedResponse } from '../utils/responseFormatter';
 
 export class BudgetController {
@@ -22,7 +23,7 @@ export class BudgetController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -40,11 +41,11 @@ export class BudgetController {
    * Get budgets with filters
    */
   async getBudgets(
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: BudgetQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const filters = {
         isActive: request.query.isActive === 'true' ? true : request.query.isActive === 'false' ? false : undefined,
         category: request.query.category,
@@ -68,7 +69,7 @@ export class BudgetController {
    */
   async getActiveBudgets(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const budgets = await this.budgetService.getActiveBudgets(userId);
 
@@ -87,7 +88,7 @@ export class BudgetController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const budgetId = request.params.id;
 
       const budget = await this.budgetService.getBudgetById(userId, budgetId);
@@ -107,7 +108,7 @@ export class BudgetController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const budgetId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -136,7 +137,7 @@ export class BudgetController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const budgetId = request.params.id;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -155,7 +156,7 @@ export class BudgetController {
    */
   async getBudgetSummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const summary = await this.budgetService.getBudgetSummary(userId);
 
