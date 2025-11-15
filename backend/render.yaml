@@ -5,14 +5,14 @@ services:
     region: singapore
     plan: free
     rootDir: backend
-    buildCommand: npm ci && npm run build
+    buildCommand: npm install && npm run build 
     startCommand: npm run start:prod
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
       - key: PORT
-        value: 5000
+        value: 3001
       - key: HOST
         value: 0.0.0.0
       - key: MONGODB_URI
