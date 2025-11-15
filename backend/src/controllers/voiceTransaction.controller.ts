@@ -21,7 +21,7 @@ export class VoiceTransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const { text } = request.body;
 
       const result = await this.voiceTransactionService.parseVoiceInput(text, userId);
@@ -41,7 +41,7 @@ export class VoiceTransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const { accountId, amount, description, category, type, text } = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
