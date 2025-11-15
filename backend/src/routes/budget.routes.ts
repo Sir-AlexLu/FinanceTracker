@@ -17,7 +17,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: createBudgetSchema,
-        tags: ['Budgets'],
         description: 'Create a new budget',
       },
     },
@@ -28,7 +27,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Budgets'],
         description: 'Get budgets with filters',
         querystring: {
           type: 'object',
@@ -48,7 +46,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
     '/active',
     {
       schema: {
-        tags: ['Budgets'],
         description: 'Get active budgets',
       },
     },
@@ -59,7 +56,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
     '/summary',
     {
       schema: {
-        tags: ['Budgets'],
         description: 'Get budget summary',
       },
     },
@@ -71,7 +67,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Budgets'],
         description: 'Get budget by ID',
       },
     },
@@ -84,7 +79,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: updateBudgetSchema,
-        tags: ['Budgets'],
         description: 'Update budget',
       },
     },
@@ -96,7 +90,6 @@ export default async function budgetRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Budgets'],
         description: 'Delete budget',
       },
     },
