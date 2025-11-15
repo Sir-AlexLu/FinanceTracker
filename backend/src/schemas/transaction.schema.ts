@@ -127,14 +127,3 @@ export const getTransactionsQuerySchema = z.object({
 });
 
 export type GetTransactionsQuery = z.infer<typeof getTransactionsQuerySchema>;
-
-// Approve recurring transaction schema
-export const approveRecurringTransactionSchema = z.object({
-  transactionId: objectIdSchema,
-  approve: z.boolean(),
-  modifyAmount: z.number().min(0.01).optional(),
-});
-
-export type ApproveRecurringTransactionInput = z.infer<
-  typeof approveRecurringTransactionSchema
->;
