@@ -1,131 +1,39 @@
+// src/routes/auth.routes.ts
 import { FastifyInstance } from 'fastify';
-import { AuthController } from '../controllers/auth.controller';
+import { AuthController } from '../controllers/auth.controller.js';
 import {
-  registerSchema,
-  loginSchema,
-  refreshTokenSchema,
-  changePasswordSchema,
-  forgotPasswordSchema,
-  resetPasswordSchema,
-  updateProfileSchema,
-} from '../schemas/auth.schema';
+  registerSchema, loginSchema, refreshTokenSchema,
+  changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, updateProfileSchema
+} from '../schemas/auth.schema.js';
 
 export default async function authRoutes(fastify: FastifyInstance) {
-  const authController = new AuthController(fastify);
+  const ctrl = new AuthController(fastify);
 
-  // Public routes
-  fastify.post(
-    '/register',
-    {
-      schema: {
-        body: registerSchema,
-        description: 'Register a new user',
-      },
-    },
-    authController.register.bind(authController)
-  );
+  fastify.post('/register', { schema: { body: registerSchema } }, ctrl.register);
+  fastify.post('/login', {
+    schema: { body: loginSchema },
+    config: { rateLimit: { max: 5, timeWindow: '15 minutes' } }
+  }, ctrl.login);
+  fastify.post('/refresh-token', { schema: { body: refreshTokenSchema } }, ctrl.refresh);
+  fastify.post('/forgot-password', {
+    schema: { body: forgotPasswordSchema },
+    config: { rateLimit: { max: 3, timeWindow: '1 hour' } }
+  }, ctrl.forgotPassword);
+  fastify.post('/reset-password', { schema: { body: resetPasswordSchema } }, ctrl.resetPassword);
 
-  fastify.post(
-    '/login',
-    {
-      schema: {
-        body: loginSchema,
-        description: 'Login user',
-      },
-      config: {
-        rateLimit: {
-          max: 5,
-          timeWindow: '15 minutes',
-        },
-      },
-    },
-    authController.login.bind(authController)
-  );
+  fastify.post('/logout', {
+    onRequest: [fastify.authenticate],
+    schema: { body: refreshTokenSchema }
+  }, ctrl.logout);
 
-  fastify.post(
-    '/refresh-token',
-    {
-      schema: {
-        body: refreshTokenSchema,
-        description: 'Refresh access token',
-      },
-    },
-    authController.refreshToken.bind(authController)
-  );
+  fastify.post('/change-password', {
+    onRequest: [fastify.authenticate],
+    schema: { body: changePasswordSchema }
+  }, ctrl.changePassword);
 
-  fastify.post(
-    '/forgot-password',
-    {
-      schema: {
-        body: forgotPasswordSchema,
-        description: 'Request password reset',
-      },
-      config: {
-        rateLimit: {
-          max: 3,
-          timeWindow: '1 hour',
-        },
-      },
-    },
-    authController.forgotPassword.bind(authController)
-  );
-
-  fastify.post(
-    '/reset-password',
-    {
-      schema: {
-        body: resetPasswordSchema,
-        description: 'Reset password with token',
-      },
-    },
-    authController.resetPassword.bind(authController)
-  );
-
-  // Protected routes
-  fastify.post(
-    '/logout',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
-        body: refreshTokenSchema,
-        description: 'Logout user',
-      },
-    },
-    authController.logout.bind(authController)
-  );
-
-  fastify.post(
-    '/change-password',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
-        body: changePasswordSchema,
-        description: 'Change password',
-      },
-    },
-    authController.changePassword.bind(authController)
-  );
-
-  fastify.get(
-    '/profile',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
-        description: 'Get user profile',
-      },
-    },
-    authController.getProfile.bind(authController)
-  );
-
-  fastify.patch(
-    '/profile',
-    {
-      onRequest: [fastify.authenticate],
-      schema: {
-        body: updateProfileSchema,
-        description: 'Update user profile',
-      },
-    },
-    authController.updateProfile.bind(authController)
-  );
+  fastify.get('/profile', { onRequest: [fastify.authenticate] }, ctrl.getProfile);
+  fastify.patch('/profile', {
+    onRequest: [fastify.authenticate],
+    schema: { body: updateProfileSchema }
+  }, ctrl.updateProfile);
 }
