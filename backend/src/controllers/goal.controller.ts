@@ -5,6 +5,7 @@ import {
   UpdateGoalInput,
   GetGoalsQuery,
 } from '../schemas/goal.schema';
+import { GoalQueryParams } from '../types/query.types';
 import { successResponse, errorResponse, paginatedResponse } from '../utils/responseFormatter';
 
 export class GoalController {
@@ -22,7 +23,7 @@ export class GoalController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -40,11 +41,11 @@ export class GoalController {
    * Get goals with filters
    */
   async getGoals(
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: GoalQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const filters = {
         status: request.query.status,
         type: request.query.type,
@@ -71,7 +72,7 @@ export class GoalController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const goalId = request.params.id;
 
       const goal = await this.goalService.getGoalById(userId, goalId);
@@ -91,7 +92,7 @@ export class GoalController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const goalId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -120,7 +121,7 @@ export class GoalController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const goalId = request.params.id;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -158,7 +159,7 @@ export class GoalController {
    */
   async getGoalSummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const summary = await this.goalService.getGoalSummary(userId);
 
