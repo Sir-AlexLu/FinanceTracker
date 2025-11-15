@@ -1,6 +1,7 @@
 import { FastifyRequest, FastifyReply } from 'fastify';
 import { NotificationService } from '../services/notification.service';
 import { GetNotificationsQuery } from '../schemas/notification.schema';
+import { NotificationQueryParams } from '../types/query.types';
 import { successResponse, errorResponse } from '../utils/responseFormatter';
 
 export class NotificationController {
@@ -14,11 +15,11 @@ export class NotificationController {
    * Get user notifications
    */
   async getNotifications(
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: NotificationQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const filters = {
         isRead: request.query.isRead === 'true' ? true : request.query.isRead === 'false' ? false : undefined,
         type: request.query.type,
@@ -43,7 +44,7 @@ export class NotificationController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const notificationId = request.params.id;
 
       const notification = await this.notificationService.markAsRead(userId, notificationId);
@@ -60,7 +61,7 @@ export class NotificationController {
    */
   async markAllAsRead(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const count = await this.notificationService.markAllAsRead(userId);
 
@@ -81,7 +82,7 @@ export class NotificationController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const notificationId = request.params.id;
 
       await this.notificationService.deleteNotification(userId, notificationId);
@@ -98,7 +99,7 @@ export class NotificationController {
    */
   async getUnreadCount(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const count = await this.notificationService.getUnreadCount(userId);
 
