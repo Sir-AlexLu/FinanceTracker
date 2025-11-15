@@ -6,10 +6,9 @@
   "type": "commonjs",
   "scripts": {
     "dev": "tsx watch src/server.ts",
-    "build": "npm install && tsc",
+    "build": "tsc",
     "start": "node dist/server.js",
     "start:prod": "NODE_ENV=production node dist/server.js",
-    "postinstall": "npm run build",
     "lint": "eslint src --ext .ts --max-warnings=0 || true",
     "format": "prettier --write \"src/**/*.ts\"",
     "typecheck": "tsc --noEmit"
@@ -39,8 +38,7 @@
     "pdfkit": "^0.14.0",
     "pino": "^8.17.2",
     "pino-pretty": "^10.3.1",
-    "zod": "^3.22.4",
-    "typescript": "^5.3.3"
+    "zod": "^3.22.4"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",
@@ -51,7 +49,8 @@
     "@typescript-eslint/parser": "^6.17.0",
     "eslint": "^8.56.0",
     "eslint-config-prettier": "^9.1.0",
-    "tsx": "^4.7.0"
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.3"
   },
   "engines": {
     "node": ">=18.0.0",
