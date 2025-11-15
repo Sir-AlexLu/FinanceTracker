@@ -18,7 +18,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: createBillSchema,
-        tags: ['Bills'],
         description: 'Create a new bill',
       },
     },
@@ -29,7 +28,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Bills'],
         description: 'Get bills with filters',
         querystring: {
           type: 'object',
@@ -50,7 +48,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
     '/upcoming',
     {
       schema: {
-        tags: ['Bills'],
         description: 'Get upcoming bills',
       },
     },
@@ -62,7 +59,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Bills'],
         description: 'Get bill by ID',
       },
     },
@@ -74,7 +70,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Bills'],
         description: 'Get bill payment approval',
       },
     },
@@ -87,7 +82,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: markBillAsPaidSchema,
-        tags: ['Bills'],
         description: 'Mark bill as paid',
       },
     },
@@ -100,7 +94,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
       schema: {
         params: idParamSchema,
         body: updateBillSchema,
-        tags: ['Bills'],
         description: 'Update bill',
       },
     },
@@ -112,7 +105,6 @@ export default async function billRoutes(fastify: FastifyInstance) {
     {
       schema: {
         params: idParamSchema,
-        tags: ['Bills'],
         description: 'Delete bill',
       },
     },
