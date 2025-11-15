@@ -1,233 +1,66 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { AuthService } from '../services/auth.service';
+// src/controllers/auth.controller.ts
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import { AuthService } from '../services/auth.service.js';
 import {
-  RegisterInput,
-  LoginInput,
-  RefreshTokenInput,
-  ChangePasswordInput,
-  ForgotPasswordInput,
-  ResetPasswordInput,
-  UpdateProfileInput,
-} from '../schemas/auth.schema';
-import { successResponse, errorResponse } from '../utils/responseFormatter';
+  registerSchema, loginSchema, refreshTokenSchema,
+  changePasswordSchema, forgotPasswordSchema, resetPasswordSchema, updateProfileSchema
+} from '../schemas/auth.schema.js';
+import { logger } from '../utils/logger.js';
 
 export class AuthController {
-  private authService: AuthService;
+  private service: AuthService;
 
   constructor(fastify: any) {
-    this.authService = new AuthService(fastify);
+    this.service = new AuthService(fastify);
   }
 
-  /**
-   * Register a new user
-   */
-  async register(
-    request: FastifyRequest<{ Body: RegisterInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { email, password, name, phoneNumber } = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
+  register = async (req: FastifyRequest<{ Body: typeof registerSchema['_output'] }>, reply: FastifyReply) => {
+    const { email, password, name, phoneNumber } = req.body;
+    const ip = req.ip;
+    const ua = req.headers['user-agent'];
 
-      const result = await this.authService.register(
-        email,
-        password,
-        name,
-        phoneNumber,
-        ipAddress,
-        userAgent
-      );
+    const result = await this.service.register(email, password, name, phoneNumber, ip, ua);
+    reply.code(201).send({ data: result, message: 'Registered' });
+  };
 
-      reply.status(201).send(
-        successResponse(
-          {
-            user: result.user,
-            tokens: result.tokens,
-          },
-          'User registered successfully'
-        )
-      );
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
+  login = async (req: FastifyRequest<{ Body: typeof loginSchema['_output'] }>, reply: FastifyReply) => {
+    const { email, password } = req.body;
+    const result = await this.service.login(email, password, req.ip, req.headers['user-agent'] || '');
+    reply.send({ data: result, message: 'Logged in' });
+  };
 
-  /**
-   * Login user
-   */
-  async login(
-    request: FastifyRequest<{ Body: LoginInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { email, password } = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
+  logout = async (req: FastifyRequest<{ Body: typeof refreshTokenSchema['_output'] }>, reply: FastifyReply) => {
+    await this.service.logout(req.user.userId, req.body.refreshToken);
+    reply.send({ message: 'Logged out' });
+  };
 
-      const result = await this.authService.login(email, password, ipAddress, userAgent);
+  refresh = async (req: FastifyRequest<{ Body: typeof refreshTokenSchema['_output'] }>, reply: FastifyReply) => {
+    const tokens = await this.service.refresh(req.body.refreshToken);
+    reply.send({ data: tokens, message: 'Refreshed' });
+  };
 
-      reply.status(200).send(
-        successResponse(
-          {
-            user: result.user,
-            tokens: result.tokens,
-          },
-          'Login successful'
-        )
-      );
-    } catch (error: any) {
-      request.log.error(error);
-      const statusCode = error.message.includes('locked') ? 423 : 401;
-      reply.status(statusCode).send(errorResponse(error.message));
-    }
-  }
+  changePassword = async (req: FastifyRequest<{ Body: typeof changePasswordSchema['_output'] }>, reply: FastifyReply) => {
+    await this.service.changePassword(req.user.userId, req.body.currentPassword, req.body.newPassword);
+    reply.send({ message: 'Password changed' });
+  };
 
-  /**
-   * Logout user
-   */
-  async logout(
-    request: FastifyRequest<{ Body: RefreshTokenInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { refreshToken } = request.body;
-      const userId = request.user.userId;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
+  forgotPassword = async (req: FastifyRequest<{ Body: typeof forgotPasswordSchema['_output'] }>, reply: FastifyReply) => {
+    const message = await this.service.forgotPassword(req.body.email);
+    reply.send({ message });
+  };
 
-      await this.authService.logout(userId, refreshToken, ipAddress, userAgent);
+  resetPassword = async (req: FastifyRequest<{ Body: typeof resetPasswordSchema['_output'] }>, reply: FastifyReply) => {
+    await this.service.resetPassword(req.body.token, req.body.newPassword);
+    reply.send({ message: 'Password reset' });
+  };
 
-      reply.status(200).send(successResponse(null, 'Logout successful'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
+  getProfile = async (req: FastifyRequest, reply: FastifyReply) => {
+    const user = await this.service.getProfile(req.user.userId);
+    reply.send({ data: user });
+  };
 
-  /**
-   * Refresh access token
-   */
-  async refreshToken(
-    request: FastifyRequest<{ Body: RefreshTokenInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { refreshToken } = request.body;
-
-      const tokens = await this.authService.refreshAccessToken(refreshToken);
-
-      reply.status(200).send(successResponse(tokens, 'Token refreshed successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(401).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Change password
-   */
-  async changePassword(
-    request: FastifyRequest<{ Body: ChangePasswordInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { currentPassword, newPassword } = request.body;
-      const userId = request.user.userId;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      await this.authService.changePassword(
-        userId,
-        currentPassword,
-        newPassword,
-        ipAddress,
-        userAgent
-      );
-
-      reply.status(200).send(successResponse(null, 'Password changed successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Forgot password
-   */
-  async forgotPassword(
-    request: FastifyRequest<{ Body: ForgotPasswordInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { email } = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      const message = await this.authService.forgotPassword(email, ipAddress, userAgent);
-
-      reply.status(200).send(successResponse({ message }));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Reset password
-   */
-  async resetPassword(
-    request: FastifyRequest<{ Body: ResetPasswordInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const { token, newPassword } = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      await this.authService.resetPassword(token, newPassword, ipAddress, userAgent);
-
-      reply.status(200).send(successResponse(null, 'Password reset successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Get user profile
-   */
-  async getProfile(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    try {
-      const userId = request.user.userId;
-
-      const user = await this.authService.getProfile(userId);
-
-      reply.status(200).send(successResponse(user));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(404).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Update user profile
-   */
-  async updateProfile(
-    request: FastifyRequest<{ Body: UpdateProfileInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const data = request.body;
-
-      const user = await this.authService.updateProfile(userId, data);
-
-      reply.status(200).send(successResponse(user, 'Profile updated successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
+  updateProfile = async (req: FastifyRequest<{ Body: typeof updateProfileSchema['_output'] }>, reply: FastifyReply) => {
+    const user = await this.service.updateProfile(req.user.userId, req.body);
+    reply.send({ data: user, message: 'Profile updated' });
+  };
 }
