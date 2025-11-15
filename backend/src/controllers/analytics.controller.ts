@@ -2,6 +2,13 @@ import { FastifyRequest, FastifyReply } from 'fastify';
 import { AnalyticsService } from '../services/analytics.service';
 import { successResponse, errorResponse } from '../utils/responseFormatter';
 
+interface AnalyticsQueryParams {
+  months?: string;
+  days?: string;
+  startDate?: string;
+  endDate?: string;
+}
+
 export class AnalyticsController {
   private analyticsService: AnalyticsService;
 
@@ -14,7 +21,7 @@ export class AnalyticsController {
    */
   async getDashboardOverview(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const overview = await this.analyticsService.getDashboardOverview(userId);
 
@@ -29,11 +36,11 @@ export class AnalyticsController {
    * Get income vs expenses comparison
    */
   async getIncomeVsExpenses(
-    request: FastifyRequest<{ Querystring: { months?: string } }>,
+    request: FastifyRequest<{ Querystring: AnalyticsQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const months = request.query.months ? parseInt(request.query.months) : 6;
 
       const data = await this.analyticsService.getIncomeVsExpenses(userId, months);
@@ -49,11 +56,11 @@ export class AnalyticsController {
    * Get category-wise spending breakdown
    */
   async getCategoryBreakdown(
-    request: FastifyRequest<{ Querystring: { startDate?: string; endDate?: string } }>,
+    request: FastifyRequest<{ Querystring: AnalyticsQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const startDate = request.query.startDate ? new Date(request.query.startDate) : undefined;
       const endDate = request.query.endDate ? new Date(request.query.endDate) : undefined;
 
@@ -70,11 +77,11 @@ export class AnalyticsController {
    * Get spending trends
    */
   async getSpendingTrends(
-    request: FastifyRequest<{ Querystring: { days?: string } }>,
+    request: FastifyRequest<{ Querystring: AnalyticsQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const days = request.query.days ? parseInt(request.query.days) : 30;
 
       const data = await this.analyticsService.getSpendingTrends(userId, days);
@@ -91,7 +98,7 @@ export class AnalyticsController {
    */
   async getFinancialInsights(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const insights = await this.analyticsService.getFinancialInsights(userId);
 
