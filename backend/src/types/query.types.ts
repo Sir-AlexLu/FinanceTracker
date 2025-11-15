@@ -11,6 +11,7 @@ export interface BudgetQueryParams {
   category?: string;
   month?: string;
   year?: string;
+  isActive?: string;
   page?: string;
   limit?: string;
 }
@@ -24,6 +25,7 @@ export interface GoalQueryParams {
 
 export interface LiabilityQueryParams {
   type?: string;
+  status?: string;
   page?: string;
   limit?: string;
 }
@@ -52,6 +54,7 @@ export interface TransactionQueryParams {
 }
 
 export interface SettlementQueryParams {
+  periodType?: string;
   month?: string;
   year?: string;
   page?: string;
