@@ -13,7 +13,6 @@ export default async function settlementRoutes(fastify: FastifyInstance) {
     {
       schema: {
         body: performSettlementSchema,
-        tags: ['Settlements'],
         description: 'Perform monthly settlement',
       },
     },
@@ -24,7 +23,6 @@ export default async function settlementRoutes(fastify: FastifyInstance) {
     '/',
     {
       schema: {
-        tags: ['Settlements'],
         description: 'Get settlements with filters',
         querystring: {
           type: 'object',
@@ -43,7 +41,6 @@ export default async function settlementRoutes(fastify: FastifyInstance) {
     '/check',
     {
       schema: {
-        tags: ['Settlements'],
         description: 'Check if settlement is needed',
       },
     },
@@ -61,7 +58,6 @@ export default async function settlementRoutes(fastify: FastifyInstance) {
           },
           required: ['period'],
         },
-        tags: ['Settlements'],
         description: 'Get settlement by period',
       },
     },
