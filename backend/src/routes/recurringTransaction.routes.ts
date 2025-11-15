@@ -16,7 +16,6 @@ export default async function recurringTransactionRoutes(fastify: FastifyInstanc
     '/pending',
     {
       schema: {
-        tags: ['Recurring Transactions'],
         description: 'Get pending recurring transaction approvals',
       },
     },
@@ -27,7 +26,6 @@ export default async function recurringTransactionRoutes(fastify: FastifyInstanc
     '/',
     {
       schema: {
-        tags: ['Recurring Transactions'],
         description: 'Get all recurring transactions',
       },
     },
@@ -39,7 +37,6 @@ export default async function recurringTransactionRoutes(fastify: FastifyInstanc
     {
       schema: {
         body: approveRecurringTransactionSchema,
-        tags: ['Recurring Transactions'],
         description: 'Approve recurring transaction',
       },
     },
@@ -51,7 +48,6 @@ export default async function recurringTransactionRoutes(fastify: FastifyInstanc
     {
       schema: {
         body: skipRecurringTransactionSchema,
-        tags: ['Recurring Transactions'],
         description: 'Skip recurring transaction',
       },
     },
@@ -63,7 +59,6 @@ export default async function recurringTransactionRoutes(fastify: FastifyInstanc
     {
       schema: {
         body: cancelRecurringTransactionSchema,
-        tags: ['Recurring Transactions'],
         description: 'Cancel recurring transaction',
       },
     },
