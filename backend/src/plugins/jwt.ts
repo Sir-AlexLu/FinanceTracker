@@ -3,19 +3,6 @@ import jwt from '@fastify/jwt';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { getEnv } from '../config/env';
 
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-
-  interface FastifyRequest {
-    user?: {
-      userId: string;
-      email: string;
-    };
-  }
-}
-
 export default fp(async (fastify: FastifyInstance) => {
   const env = getEnv();
 
@@ -42,8 +29,8 @@ export default fp(async (fastify: FastifyInstance) => {
   // Decorate with authenticate method
   fastify.decorate('authenticate', async function (request: FastifyRequest, reply: FastifyReply) {
     try {
-      const token = await request.jwtVerify({ namespace: 'access' });
-      request.user = token as { userId: string; email: string };
+      await request.jwtVerify({ namespace: 'access' });
+      // request.user will be automatically populated with userId and email
     } catch (err) {
       reply.status(401).send({
         statusCode: 401,
