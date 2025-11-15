@@ -1,96 +1,71 @@
-import Fastify, { FastifyInstance } from 'fastify';
-import { getEnv } from './config/env';
-
-// Plugins
-import corsPlugin from './plugins/cors';
-import helmetPlugin from './plugins/helmet';
-import rateLimitPlugin from './plugins/rateLimit';
-import jwtPlugin from './plugins/jwt';
-import sensiblePlugin from './plugins/sensible';
-import mongoosePlugin from './plugins/mongoose';
-
-// Routes
-import routes from './routes';
+// src/app.ts
+import Fastify from 'fastify';
+import corsPlugin from './plugins/cors.js';
+import helmetPlugin from './plugins/helmet.js';
+import rateLimitPlugin from './plugins/rateLimit.js';
+import jwtPlugin from './plugins/jwt.js';
+import sensiblePlugin from './plugins/sensible.js';
+import mongoosePlugin from './plugins/mongoose.js';
+import routes from './routes/index.js';
+import { getEnv } from './config/env.js';
+import { logger } from './utils/logger.js';
+import type { FastifyInstance } from 'fastify';
 
 export async function buildApp(): Promise<FastifyInstance> {
   const env = getEnv();
 
-  const fastify = Fastify({
-    logger: {
-      level: env.LOG_LEVEL,
-      transport:
-        env.NODE_ENV === 'development'
-          ? {
-              target: 'pino-pretty',
-              options: {
-                translateTime: 'HH:MM:ss Z',
-                ignore: 'pid,hostname',
-                colorize: true,
-              },
-            }
-          : undefined,
-    },
+  const app = Fastify({
+    logger,
     trustProxy: true,
     disableRequestLogging: env.NODE_ENV === 'production',
     requestIdHeader: 'x-request-id',
     requestIdLogLabel: 'reqId',
-    bodyLimit: 1048576, // 1MB
-    connectionTimeout: 30000,
-    keepAliveTimeout: 5000,
+    bodyLimit: 1_048_576, // 1MB
+    connectionTimeout: 30_000,
+    keepAliveTimeout: 5_000,
   });
 
-  // Register plugins in order
-  await fastify.register(sensiblePlugin);
-  await fastify.register(corsPlugin);
-  await fastify.register(helmetPlugin);
-  await fastify.register(rateLimitPlugin);
-  await fastify.register(jwtPlugin);
-  await fastify.register(mongoosePlugin);
+  // Register core plugins
+  await app.register(sensiblePlugin);
+  await app.register(corsPlugin);
+  await app.register(helmetPlugin);
+  await app.register(rateLimitPlugin);
+  await app.register(jwtPlugin);
+  await app.register(mongoosePlugin);
 
-  // Register all routes (from ./routes/index.ts or similar)
-  await fastify.register(routes);
+  // Register all API routes
+  await app.register(routes, { prefix: '/api' });
 
-  // Health check route - critical for monitoring
-  fastify.get('/api/health', async () => {
-    return {
-      status: 'ok',
-      timestamp: new Date().toISOString(),
-      uptime: process.uptime(),
-      environment: env.NODE_ENV,
-    };
-  });
+  // Health check
+  app.get('/health', async () => ({
+    status: 'ok',
+    timestamp: new Date().toISOString(),
+    uptime: process.uptime(),
+    env: env.NODE_ENV,
+  }));
 
-  // Root route
-  fastify.get('/', async () => {
-    return {
-      name: 'Finance Tracker API',
-      version: '1.5.0',
-      status: 'running',
-      message: 'Welcome to Finance Tracker API',
-      docs: '/documentation',
-    };
-  });
+  // Root
+  app.get('/', async () => ({
+    name: 'Finance Tracker API',
+    version: '2.0.0',
+    status: 'running',
+    docs: '/documentation',
+  }));
 
-  // 404 handler
-  fastify.setNotFoundHandler((request, reply) => {
-    reply.status(404).send({
-      statusCode: 404,
-      error: 'Not Found',
-      message: `Route ${request.method}:${request.url} not found`,
-    });
+  // 404
+  app.setNotFoundHandler((req, reply) => {
+    reply.notFound();
   });
 
   // Global error handler
-  fastify.setErrorHandler((error, request, reply) => {
-    fastify.log.error(error);
+  app.setErrorHandler((error, req, reply) => {
+    logger.error(error, 'Unhandled error');
 
-    const statusCode = error.statusCode || 500;
-
-    // Don't expose internal errors in production
+    const statusCode = error.statusCode ?? 500;
     const message =
-      env.NODE_ENV === 'production' && statusCode === 500
+      env.NODE_ENV === 'production' && statusCode >= 500
         ? 'Internal Server Error'
-        : error.message || 'An unexpected error occurred';
+        : error.message;
 
     reply.status(statusCode).send({
       statusCode,
@@ -99,5 +74,5 @@ export async function buildApp(): Promise<FastifyInstance> {
     });
   });
 
-  return fastify;
+  return app;
 }
