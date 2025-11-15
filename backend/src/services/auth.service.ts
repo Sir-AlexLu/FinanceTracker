@@ -1,512 +1,155 @@
+// src/services/auth.service.ts
 import crypto from 'crypto';
-import { User, IUser } from '../models/User';
-import { AuditLog, AuditAction, AuditSeverity } from '../models/AuditLog';
-import { getEnv } from '../config/env';
-import { hashPassword, comparePassword } from '../utils/encryption';
-import { TokenPair } from '../types/models.types';
-import { FastifyInstance } from 'fastify';
-import mongoose from 'mongoose';
+import { User, IUser } from '../models/User.js';
+import { getEnv } from '../config/env.js';
+import { logger } from '../utils/logger.js';
+import type { FastifyInstance } from 'fastify';
+
+export interface TokenPair {
+  accessToken: string;
+  refreshToken: string;
+}
 
 export class AuthService {
-  private fastify: FastifyInstance;
+  constructor(private fastify: FastifyInstance) {}
 
-  constructor(fastify: FastifyInstance) {
-    this.fastify = fastify;
-  }
-
-  /**
-   * Register a new user
-   */
   async register(
     email: string,
     password: string,
     name: string,
     phoneNumber?: string,
-    ipAddress?: string,
-    userAgent?: string
-  ): Promise<{ user: IUser; tokens: TokenPair }> {
-    try {
-      // Check if user already exists
-      const existingUser = await User.findOne({ email });
-      if (existingUser) {
-        throw new Error('User with this email already exists');
-      }
+    ip?: string,
+    ua?: string
+  ): Promise<{ user: Partial<IUser>; tokens: TokenPair }> {
+    const existing = await User.findOne({ email });
+    if (existing) throw new Error('Email already in use');
 
-      // Create user (password will be hashed in pre-save hook)
-      const user = await User.create({
-        email,
-        password,
-        name,
-        phoneNumber,
-        isVerified: false, // Email verification can be added later
-        isActive: true,
-      });
+    const user = await User.create({ email, password, name, phoneNumber });
+    const tokens = await this.generateTokens(user._id.toString(), email);
 
-      // Generate tokens
-      const tokens = await this.generateTokenPair(user._id.toString(), user.email);
+    await User.findByIdAndUpdate(user._id, { $push: { refreshTokens: tokens.refreshToken } });
 
-      // Save refresh token
-      await User.findByIdAndUpdate(user._id, {
-        $push: { refreshTokens: tokens.refreshToken },
-      });
+    logger.info({ userId: user._id, ip, ua }, 'User registered');
 
-      // Audit log
-      if (ipAddress && userAgent) {
-        await AuditLog.log({
-          userId: user._id,
-          action: AuditAction.REGISTER,
-          resource: 'User',
-          resourceId: user._id,
-          details: { email: user.email, name: user.name },
-          ipAddress,
-          userAgent,
-          statusCode: 201,
-        });
-      }
-
-      // Remove password from response
-      const userObject = user.toObject();
-      delete (userObject as any).password;
-
-      return { user: userObject as IUser, tokens };
-    } catch (error: any) {
-      this.fastify.log.error('Registration error:', error);
-      throw error;
-    }
+    const safeUser = user.toObject();
+    delete (safeUser as any).password;
+    return { user: safeUser, tokens };
   }
 
-  /**
-   * Login user
-   */
-  async login(
-    email: string,
-    password: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<{ user: IUser; tokens: TokenPair }> {
-    try {
-      // Find user with password field
-      const user = await User.findOne({ email }).select('+password');
+  async login(email: string, password: string, ip: string, ua: string): Promise<{ user: Partial<IUser>; tokens: TokenPair }> {
+    const user = await User.findOne({ email }).select('+password');
+    if (!user) throw new Error('Invalid credentials');
 
-      if (!user) {
-        // Audit failed login
-        await AuditLog.log({
-          action: AuditAction.LOGIN_FAILED,
-          severity: AuditSeverity.WARNING,
-          resource: 'User',
-          details: { email, reason: 'User not found' },
-          ipAddress,
-          userAgent,
-          statusCode: 401,
-        });
-
-        throw new Error('Invalid email or password');
-      }
-
-      // Check if account is locked
-      if (user.isLocked()) {
-        const lockUntil = user.lockUntil!;
-        const minutesLeft = Math.ceil((lockUntil.getTime() - Date.now()) / 60000);
-
-        await AuditLog.log({
-          userId: user._id,
-          action: AuditAction.LOGIN_FAILED,
-          severity: AuditSeverity.WARNING,
-          resource: 'User',
-          details: { email, reason: 'Account locked', minutesLeft },
-          ipAddress,
-          userAgent,
-          statusCode: 423,
-        });
-
-        throw new Error(
-          `Account is locked due to too many failed login attempts. Try again in ${minutesLeft} minutes.`
-        );
-      }
-
-      // Check if account is active
-      if (!user.isActive) {
-        await AuditLog.log({
-          userId: user._id,
-          action: AuditAction.LOGIN_FAILED,
-          severity: AuditSeverity.WARNING,
-          resource: 'User',
-          details: { email, reason: 'Account deactivated' },
-          ipAddress,
-          userAgent,
-          statusCode: 403,
-        });
-
-        throw new Error('Account has been deactivated');
-      }
-
-      // Verify password
-      const isPasswordValid = await user.comparePassword(password);
-
-      if (!isPasswordValid) {
-        // Increment failed login attempts
-        await user.incLoginAttempts();
-
-        await AuditLog.log({
-          userId: user._id,
-          action: AuditAction.LOGIN_FAILED,
-          severity: AuditSeverity.WARNING,
-          resource: 'User',
-          details: {
-            email,
-            reason: 'Invalid password',
-            failedAttempts: user.failedLoginAttempts + 1,
-          },
-          ipAddress,
-          userAgent,
-          statusCode: 401,
-        });
-
-        throw new Error('Invalid email or password');
-      }
-
-      // Reset failed login attempts on successful login
-      await user.resetLoginAttempts();
-
-      // Update last login info
-      await User.findByIdAndUpdate(user._id, {
-        lastLoginAt: new Date(),
-        lastLoginIP: ipAddress,
-      });
-
-      // Generate tokens
-      const tokens = await this.generateTokenPair(user._id.toString(), user.email);
-
-      // Save refresh token
-      await User.findByIdAndUpdate(user._id, {
-        $push: { refreshTokens: tokens.refreshToken },
-      });
-
-      // Audit successful login
-      await AuditLog.log({
-        userId: user._id,
-        action: AuditAction.LOGIN,
-        resource: 'User',
-        resourceId: user._id,
-        details: { email: user.email },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-
-      // Remove sensitive fields
-      const userObject = user.toObject();
-      delete (userObject as any).password;
-      delete (userObject as any).refreshTokens;
-
-      return { user: userObject as IUser, tokens };
-    } catch (error: any) {
-      this.fastify.log.error('Login error:', error);
-      throw error;
+    if (user.isLocked()) {
+      const mins = Math.ceil((user.lockUntil!.getTime() - Date.now()) / 60000);
+      throw new Error(`Account locked. Try again in ${mins} minute${mins > 1 ? 's' : ''}.`);
     }
+
+    if (!user.isActive) throw new Error('Account deactivated');
+
+    const valid = await user.comparePassword(password);
+    if (!valid) {
+      await user.incLoginAttempts();
+      logger.warn({ userId: user._id, ip }, 'Failed login');
+      throw new Error('Invalid credentials');
+    }
+
+    await user.resetLoginAttempts();
+    await User.findByIdAndUpdate(user._id, { lastLoginAt: new Date(), lastLoginIP: ip });
+
+    const tokens = await this.generateTokens(user._id.toString(), email);
+    await User.findByIdAndUpdate(user._id, { $push: { refreshTokens: tokens.refreshToken } });
+
+    logger.info({ userId: user._id, ip }, 'Login successful');
+
+    const safeUser = user.toObject();
+    delete (safeUser as any).password;
+    delete (safeUser as any).refreshTokens;
+    return { user: safeUser, tokens };
   }
 
-  /**
-   * Logout user
-   */
-  async logout(
-    userId: string,
-    refreshToken: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
-    try {
-      // Remove refresh token
-      await User.findByIdAndUpdate(userId, {
-        $pull: { refreshTokens: refreshToken },
-      });
-
-      // Audit logout
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.LOGOUT,
-        resource: 'User',
-        resourceId: new mongoose.Types.ObjectId(userId),
-        details: {},
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-    } catch (error: any) {
-      this.fastify.log.error('Logout error:', error);
-      throw error;
-    }
+  async logout(userId: string, refreshToken: string): Promise<void> {
+    await User.findByIdAndUpdate(userId, { $pull: { refreshTokens: refreshToken } });
+    logger.info({ userId }, 'Logout');
   }
 
-  /**
-   * Refresh access token
-   */
-  async refreshAccessToken(refreshToken: string): Promise<TokenPair> {
-    try {
-      // Verify refresh token
-      const decoded = this.fastify.jwt.verify(refreshToken, {
-        namespace: 'refresh',
-      }) as { userId: string; email: string };
+  async refresh(refreshToken: string): Promise<TokenPair> {
+    const payload = this.fastify.jwt.verify(refreshToken, { secret: getEnv().JWT_REFRESH_SECRET }) as { userId: string };
+    const user = await User.findOne({ _id: payload.userId, refreshTokens: refreshToken, isActive: true });
+    if (!user) throw new Error('Invalid refresh token');
 
-      // Check if refresh token exists in database
-      const user = await User.findOne({
-        _id: decoded.userId,
-        refreshTokens: refreshToken,
-        isActive: true,
-      });
+    const tokens = await this.generateTokens(user._id.toString(), user.email);
+    await User.findByIdAndUpdate(user._id, {
+      $pull: { refreshTokens: refreshToken },
+      $push: { refreshTokens: tokens.refreshToken },
+    });
 
-      if (!user) {
-        throw new Error('Invalid refresh token');
-      }
-
-      // Generate new token pair
-      const tokens = await this.generateTokenPair(user._id.toString(), user.email);
-
-      // Replace old refresh token with new one
-      await User.findByIdAndUpdate(user._id, {
-        $pull: { refreshTokens: refreshToken },
-        $push: { refreshTokens: tokens.refreshToken },
-      });
-
-      return tokens;
-    } catch (error: any) {
-      this.fastify.log.error('Refresh token error:', error);
-      throw new Error('Invalid or expired refresh token');
-    }
+    return tokens;
   }
 
-  /**
-   * Change password
-   */
-  async changePassword(
-    userId: string,
-    currentPassword: string,
-    newPassword: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
-    try {
-      const user = await User.findById(userId).select('+password');
+  async changePassword(userId: string, current: string, newPass: string): Promise<void> {
+    const user = await User.findById(userId).select('+password');
+    if (!user) throw new Error('User not found');
 
-      if (!user) {
-        throw new Error('User not found');
-      }
+    const valid = await user.comparePassword(current);
+    if (!valid) throw new Error('Current password incorrect');
 
-      // Verify current password
-      const isPasswordValid = await user.comparePassword(currentPassword);
+    user.password = newPass;
+    await user.save();
+    await User.findByIdAndUpdate(userId, { $set: { refreshTokens: [] } });
 
-      if (!isPasswordValid) {
-        await AuditLog.log({
-          userId: user._id,
-          action: AuditAction.PASSWORD_CHANGE,
-          severity: AuditSeverity.WARNING,
-          resource: 'User',
-          resourceId: user._id,
-          details: { reason: 'Invalid current password' },
-          ipAddress,
-          userAgent,
-          statusCode: 401,
-        });
-
-        throw new Error('Current password is incorrect');
-      }
-
-      // Update password (will be hashed in pre-save hook)
-      user.password = newPassword;
-      await user.save();
-
-      // Clear all refresh tokens (logout from all devices)
-      await User.findByIdAndUpdate(userId, {
-        $set: { refreshTokens: [] },
-      });
-
-      // Audit password change
-      await AuditLog.log({
-        userId: user._id,
-        action: AuditAction.PASSWORD_CHANGE,
-        resource: 'User',
-        resourceId: user._id,
-        details: { message: 'Password changed successfully' },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-    } catch (error: any) {
-      this.fastify.log.error('Change password error:', error);
-      throw error;
-    }
+    logger.info({ userId }, 'Password changed');
   }
 
-  /**
-   * Request password reset
-   */
-  async forgotPassword(email: string, ipAddress: string, userAgent: string): Promise<string> {
-    try {
-      const user = await User.findOne({ email, isActive: true });
+  async forgotPassword(email: string): Promise<string> {
+    const user = await User.findOne({ email, isActive: true });
+    if (!user) return 'If account exists, reset link sent.';
 
-      if (!user) {
-        // Don't reveal if user exists
-        this.fastify.log.warn(`Password reset requested for non-existent email: ${email}`);
-        return 'If an account exists with this email, a password reset link has been sent.';
-      }
+    const token = user.generatePasswordResetToken();
+    await user.save();
 
-      // Generate reset token
-      const resetToken = user.generatePasswordResetToken();
-      await user.save();
-
-      // Audit password reset request
-      await AuditLog.log({
-        userId: user._id,
-        action: AuditAction.PASSWORD_RESET,
-        resource: 'User',
-        resourceId: user._id,
-        details: { email },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-
-      // In production, send email with reset token
-      // For now, return the token (REMOVE IN PRODUCTION)
-      this.fastify.log.info(`Password reset token for ${email}: ${resetToken}`);
-
-      return resetToken; // In production, don't return this
-    } catch (error: any) {
-      this.fastify.log.error('Forgot password error:', error);
-      throw error;
-    }
+    logger.info({ userId: user._id }, 'Password reset requested');
+    return token; // REMOVE IN PROD
   }
 
-  /**
-   * Reset password with token
-   */
-  async resetPassword(
-    token: string,
-    newPassword: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
-    try {
-      // Hash the token to compare with stored hash
-      const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
+  async resetPassword(token: string, newPass: string): Promise<void> {
+    const hash = crypto.createHash('sha256').update(token).digest('hex');
+    const user = await User.findOne({
+      passwordResetToken: hash,
+      passwordResetExpires: { $gt: new Date() },
+    });
 
-      // Find user with valid reset token
-      const user = await User.findOne({
-        passwordResetToken: hashedToken,
-        passwordResetExpires: { $gt: new Date() },
-        isActive: true,
-      }).select('+password +passwordResetToken +passwordResetExpires');
+    if (!user) throw new Error('Invalid or expired token');
 
-      if (!user) {
-        throw new Error('Invalid or expired password reset token');
-      }
+    user.password = newPass;
+    user.passwordResetToken = undefined;
+    user.passwordResetExpires = undefined;
+    await user.save();
+    await User.findByIdAndUpdate(user._id, { $set: { refreshTokens: [] } });
 
-      // Update password
-      user.password = newPassword;
-      user.passwordResetToken = undefined;
-      user.passwordResetExpires = undefined;
-      await user.save();
-
-      // Clear all refresh tokens
-      await User.findByIdAndUpdate(user._id, {
-        $set: { refreshTokens: [] },
-      });
-
-      // Audit password reset
-      await AuditLog.log({
-        userId: user._id,
-        action: AuditAction.PASSWORD_RESET,
-        resource: 'User',
-        resourceId: user._id,
-        details: { message: 'Password reset successful' },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-    } catch (error: any) {
-      this.fastify.log.error('Reset password error:', error);
-      throw error;
-    }
+    logger.info({ userId: user._id }, 'Password reset');
   }
 
-  /**
-   * Update user profile
-   */
-  async updateProfile(
-    userId: string,
-    data: {
-      name?: string;
-      phoneNumber?: string;
-      preferences?: any;
-    }
-  ): Promise<IUser> {
-    try {
-      const updateData: any = {};
-
-      if (data.name) updateData.name = data.name;
-      if (data.phoneNumber) updateData.phoneNumber = data.phoneNumber;
-      if (data.preferences) {
-        // Merge preferences
-        if (data.preferences.currency)
-          updateData['preferences.currency'] = data.preferences.currency;
-        if (data.preferences.dateFormat)
-          updateData['preferences.dateFormat'] = data.preferences.dateFormat;
-        if (data.preferences.notifications) {
-          Object.keys(data.preferences.notifications).forEach((key) => {
-            updateData[`preferences.notifications.${key}`] =
-              data.preferences.notifications[key];
-          });
-        }
-      }
-
-      const user = await User.findByIdAndUpdate(userId, updateData, {
-        new: true,
-        runValidators: true,
-      });
-
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      return user;
-    } catch (error: any) {
-      this.fastify.log.error('Update profile error:', error);
-      throw error;
-    }
+  async getProfile(userId: string): Promise<Partial<IUser>> {
+    const user = await User.findById(userId);
+    if (!user) throw new Error('User not found');
+    const safe = user.toObject();
+    delete (safe as any).password;
+    return safe;
   }
 
-  /**
-   * Get user profile
-   */
-  async getProfile(userId: string): Promise<IUser> {
-    try {
-      const user = await User.findById(userId);
-
-      if (!user) {
-        throw new Error('User not found');
-      }
-
-      return user;
-    } catch (error: any) {
-      this.fastify.log.error('Get profile error:', error);
-      throw error;
-    }
+  async updateProfile(userId: string, data: any): Promise<Partial<IUser>> {
+    const user = await User.findByIdAndUpdate(userId, data, { new: true, runValidators: true });
+    if (!user) throw new Error('User not found');
+    const safe = user.toObject();
+    delete (safe as any).password;
+    return safe;
   }
 
-  /**
-   * Generate JWT token pair
-   */
-  private async generateTokenPair(userId: string, email: string): Promise<TokenPair> {
+  private async generateTokens(userId: string, email: string): Promise<TokenPair> {
     const payload = { userId, email };
-
-    const accessToken = this.fastify.jwt.sign(payload, {
-      namespace: 'access',
-    });
-
-    const refreshToken = this.fastify.jwt.sign(payload, {
-      namespace: 'refresh',
-    });
-
-    return { accessToken, refreshToken };
+    const access = this.fastify.jwt.sign(payload, { expiresIn: getEnv().JWT_ACCESS_EXPIRES_IN });
+    const refresh = this.fastify.jwt.sign(payload, { secret: getEnv().JWT_REFRESH_SECRET, expiresIn: getEnv().JWT_REFRESH_EXPIRES_IN });
+    return { accessToken: access, refreshToken: refresh };
   }
 }
