@@ -1,34 +1,23 @@
+// src/plugins/rateLimit.ts
 import fp from 'fastify-plugin';
 import rateLimit from '@fastify/rate-limit';
-import { FastifyInstance } from 'fastify';
-import { getEnv } from '../config/env';
+import { getEnv } from '../config/env.js';
 
-export default fp(async (fastify: FastifyInstance) => {
+export default fp(async (fastify) => {
   const env = getEnv();
 
   await fastify.register(rateLimit, {
-    global: true,
-    max: env.RATE_LIMIT_MAX,
-    timeWindow: env.RATE_LIMIT_TIMEWINDOW,
-    cache: 10000,
-    allowList: ['127.0.0.1'],
+    max: Number(env.RATE_LIMIT_MAX),
+    timeWindow: Number(env.RATE_LIMIT_TIMEWINDOW),
     redis: env.REDIS_URL ? { url: env.REDIS_URL } : undefined,
-    keyGenerator: (request) => {
-      return (request.headers['x-forwarded-for'] as string) || request.ip || 'unknown';
-    },
-    errorResponseBuilder: (request, context) => {
-      return {
-        statusCode: 429,
-        error: 'Too Many Requests',
-        message: `Rate limit exceeded. Try again in ${Math.ceil(context.ttl / 1000)} seconds.`,
-      };
-    },
-    addHeaders: {
-      'x-ratelimit-limit': true,
-      'x-ratelimit-remaining': true,
-      'x-ratelimit-reset': true,
-    },
+    keyGenerator: (req) => req.ip,
+    ban: 3,
+    errorResponseBuilder: (req, ctx) => ({
+      statusCode: 429,
+      error: 'Too Many Requests',
+      retryAfter: Math.ceil(ctx.ttl / 1000),
+    }),
   });
 
-  fastify.log.info('✅ Rate limiting plugin registered');
+  fastify.log.info('Rate limiting active');
 });
