@@ -11,7 +11,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/dashboard',
     {
       schema: {
-        tags: ['Analytics'],
         description: 'Get dashboard overview',
       },
     },
@@ -22,7 +21,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/income-vs-expenses',
     {
       schema: {
-        tags: ['Analytics'],
         description: 'Get income vs expenses comparison',
         querystring: {
           type: 'object',
@@ -39,7 +37,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/category-breakdown',
     {
       schema: {
-        tags: ['Analytics'],
         description: 'Get category-wise spending breakdown',
         querystring: {
           type: 'object',
@@ -57,7 +54,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/spending-trends',
     {
       schema: {
-        tags: ['Analytics'],
         description: 'Get spending trends',
         querystring: {
           type: 'object',
@@ -74,7 +70,6 @@ export default async function analyticsRoutes(fastify: FastifyInstance) {
     '/insights',
     {
       schema: {
-        tags: ['Analytics'],
         description: 'Get financial insights',
       },
     },
