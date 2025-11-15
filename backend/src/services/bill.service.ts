@@ -371,7 +371,7 @@ export class BillService {
       page?: number;
       limit?: number;
     }
-  ): Promise<{ bills: IBill[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{ bills: IBill[]; total: number; page: number; limit: number; totalPages: number }> {
     try {
       const query: any = { userId };
 
@@ -402,6 +402,7 @@ export class BillService {
         bills,
         total,
         page,
+        limit,
         totalPages: Math.ceil(total / limit),
       };
     } catch (error: any) {
