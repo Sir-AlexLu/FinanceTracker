@@ -93,7 +93,7 @@ export class AuthController {
   ): Promise<void> {
     try {
       const { refreshToken } = request.body;
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
 
@@ -134,7 +134,7 @@ export class AuthController {
   ): Promise<void> {
     try {
       const { currentPassword, newPassword } = request.body;
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
 
@@ -200,7 +200,7 @@ export class AuthController {
    */
   async getProfile(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const user = await this.authService.getProfile(userId);
 
@@ -219,7 +219,7 @@ export class AuthController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
 
       const user = await this.authService.updateProfile(userId, data);
