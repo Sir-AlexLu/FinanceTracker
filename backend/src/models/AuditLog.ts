@@ -1,4 +1,4 @@
-import mongoose, { Schema, Document } from 'mongoose';
+import mongoose, { Schema, Document, Model } from 'mongoose';
 
 export enum AuditAction {
   // Authentication
@@ -80,7 +80,30 @@ export interface IAuditLog extends Document {
   timestamp: Date;
 }
 
-const AuditLogSchema = new Schema<IAuditLog>(
+// Interface for static methods
+interface IAuditLogModel extends Model<IAuditLog> {
+  log(data: {
+    userId?: mongoose.Types.ObjectId | string;
+    action: AuditAction;
+    severity?: AuditSeverity;
+    resource: string;
+    resourceId?: mongoose.Types.ObjectId | string;
+    details?: Record<string, any>;
+    ipAddress: string;
+    userAgent: string;
+    requestId?: string;
+    statusCode?: number;
+    errorMessage?: string;
+  }): Promise<IAuditLog>;
+
+  getUserActivity(userId: mongoose.Types.ObjectId, limit?: number): Promise<IAuditLog[]>;
+
+  getSecurityEvents(userId?: mongoose.Types.ObjectId, hours?: number): Promise<IAuditLog[]>;
+
+  getFailedLoginAttempts(ipAddress: string, minutes?: number): Promise<number>;
+}
+
+const AuditLogSchema = new Schema<IAuditLog, IAuditLogModel>(
   {
     userId: {
       type: Schema.Types.ObjectId,
@@ -147,7 +170,7 @@ const AuditLogSchema = new Schema<IAuditLog>(
     },
   },
   {
-    timestamps: false, // We use custom timestamp field
+    timestamps: false,
   }
 );
 
@@ -157,8 +180,8 @@ AuditLogSchema.index({ action: 1, timestamp: -1 });
 AuditLogSchema.index({ severity: 1, timestamp: -1 });
 AuditLogSchema.index({ ipAddress: 1, timestamp: -1 });
 
-// TTL index - auto-delete logs older than 90 days (from constants)
-AuditLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 7776000 }); // 90 days
+// TTL index - auto-delete logs older than 90 days
+AuditLogSchema.index({ timestamp: 1 }, { expireAfterSeconds: 7776000 });
 
 // Static method: Create audit log
 AuditLogSchema.statics.log = async function (data: {
@@ -173,7 +196,7 @@ AuditLogSchema.statics.log = async function (data: {
   requestId?: string;
   statusCode?: number;
   errorMessage?: string;
-}) {
+}): Promise<IAuditLog> {
   return this.create({
     userId: data.userId,
     action: data.action,
@@ -194,7 +217,7 @@ AuditLogSchema.statics.log = async function (data: {
 AuditLogSchema.statics.getUserActivity = async function (
   userId: mongoose.Types.ObjectId,
   limit: number = 50
-) {
+): Promise<IAuditLog[]> {
   return this.find({ userId })
     .sort({ timestamp: -1 })
     .limit(limit)
@@ -205,7 +228,7 @@ AuditLogSchema.statics.getUserActivity = async function (
 AuditLogSchema.statics.getSecurityEvents = async function (
   userId?: mongoose.Types.ObjectId,
   hours: number = 24
-) {
+): Promise<IAuditLog[]> {
   const since = new Date(Date.now() - hours * 60 * 60 * 1000);
 
   const query: any = {
@@ -235,7 +258,7 @@ AuditLogSchema.statics.getSecurityEvents = async function (
 AuditLogSchema.statics.getFailedLoginAttempts = async function (
   ipAddress: string,
   minutes: number = 15
-) {
+): Promise<number> {
   const since = new Date(Date.now() - minutes * 60 * 1000);
 
   return this.countDocuments({
@@ -245,4 +268,4 @@ AuditLogSchema.statics.getFailedLoginAttempts = async function (
   });
 };
 
-export const AuditLog = mongoose.model<IAuditLog>('AuditLog', AuditLogSchema);
+export const AuditLog = mongoose.model<IAuditLog, IAuditLogModel>('AuditLog', AuditLogSchema);
