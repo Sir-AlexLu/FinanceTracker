@@ -5,6 +5,7 @@ import {
   UpdateTransactionInput,
   GetTransactionsQuery,
 } from '../schemas/transaction.schema';
+import { TransactionQueryParams } from '../types/query.types';
 import { successResponse, errorResponse, paginatedResponse } from '../utils/responseFormatter';
 
 export class TransactionController {
@@ -22,7 +23,7 @@ export class TransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -45,11 +46,11 @@ export class TransactionController {
    * Get transactions with filters
    */
   async getTransactions(
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: TransactionQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const filters = {
         type: request.query.type,
         accountId: request.query.accountId,
@@ -62,7 +63,7 @@ export class TransactionController {
       const result = await this.transactionService.getTransactions(userId, filters);
 
       reply.status(200).send(
-        paginatedResponse(result.transactions, result.page, result.total, result.total)
+        paginatedResponse(result.transactions, result.page, result.limit, result.total)
       );
     } catch (error: any) {
       request.log.error(error);
@@ -78,7 +79,7 @@ export class TransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const transactionId = request.params.id;
 
       const transaction = await this.transactionService.getTransactionById(
@@ -101,7 +102,7 @@ export class TransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const transactionId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -130,7 +131,7 @@ export class TransactionController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const transactionId = request.params.id;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
