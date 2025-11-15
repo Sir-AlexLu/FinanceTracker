@@ -1,73 +1,67 @@
+// src/config/env.ts
 import { z } from 'zod';
 
 const envSchema = z.object({
   // Server
   NODE_ENV: z.enum(['development', 'production', 'test']).default('development'),
-  PORT: z.string().default('5000').transform(Number),
+  PORT: z.coerce.number().int().min(1024).max(65535).default(5000),
   HOST: z.string().default('0.0.0.0'),
 
   // Database
-  MONGODB_URI: z.string().url('Invalid MongoDB URI'),
-  MONGODB_DB_NAME: z.string().min(1, 'Database name is required'),
+  MONGODB_URI: z.string().url(),
+  MONGODB_DB_NAME: z.string().min(1),
 
   // JWT
-  JWT_ACCESS_SECRET: z.string().min(32, 'JWT Access Secret must be at least 32 characters'),
-  JWT_REFRESH_SECRET: z.string().min(32, 'JWT Refresh Secret must be at least 32 characters'),
+  JWT_ACCESS_SECRET: z.string().min(32),
+  JWT_REFRESH_SECRET: z.string().min(32),
   JWT_ACCESS_EXPIRES_IN: z.string().default('15m'),
   JWT_REFRESH_EXPIRES_IN: z.string().default('7d'),
 
   // CORS
-  FRONTEND_URL: z.string().url('Invalid Frontend URL'),
+  FRONTEND_URL: z.string().url(),
 
   // Security
-  BCRYPT_ROUNDS: z.string().default('12').transform(Number),
-  RATE_LIMIT_MAX: z.string().default('100').transform(Number),
-  RATE_LIMIT_TIMEWINDOW: z.string().default('900000').transform(Number),
+  BCRYPT_ROUNDS: z.coerce.number().int().min(10).max(14).default(12),
+  RATE_LIMIT_MAX: z.coerce.number().int().min(1).default(100),
+  RATE_LIMIT_TIMEWINDOW: z.coerce.number().int().min(1000).default(900_000), // 15min
 
   // Encryption
-  ENCRYPTION_KEY: z.string().length(64, 'Encryption key must be exactly 64 characters'),
+  ENCRYPTION_KEY: z.string().length(64),
 
   // Features
-  ENABLE_AUDIT_LOG: z
-    .string()
-    .default('true')
-    .transform((val) => val === 'true'),
-  ENABLE_CRON_JOBS: z
-    .string()
-    .default('true')
-    .transform((val) => val === 'true'),
+  ENABLE_AUDIT_LOG: z.coerce.boolean().default(true),
+  ENABLE_CRON_JOBS: z.coerce.boolean().default(true),
 
   // Logging
-  LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+  LOG_LEVEL: z
+    .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
+    .default('info'),
 
-  // Optional Redis
+  // Optional
   REDIS_URL: z.string().url().optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;
 
-let env: Env;
+let cachedEnv: Env | null = null;
 
 export function validateEnv(): Env {
-  try {
-    env = envSchema.parse(process.env);
-    return env;
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      console.error('❌ Invalid environment variables:');
-      error.errors.forEach((err) => {
-        console.error(`  - ${err.path.join('.')}: ${err.message}`);
-      });
-    } else {
-      console.error('❌ Error validating environment variables:', error);
-    }
+  if (cachedEnv) return cachedEnv;
+
+  const result = envSchema.safeParse(process.env);
+
+  if (!result.success) {
+    console.error('Invalid environment variables:');
+    result.error.errors.forEach((err) => {
+      console.error(`  • ${err.path.join('.')}: ${err.message}`);
+    });
     process.exit(1);
   }
+
+  cachedEnv = result.data;
+  return cachedEnv;
 }
 
 export function getEnv(): Env {
-  if (!env) {
-    env = validateEnv();
-  }
-  return env;
+  return validateEnv();
 }
