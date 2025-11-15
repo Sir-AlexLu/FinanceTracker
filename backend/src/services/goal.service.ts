@@ -309,7 +309,7 @@ export class GoalService {
     }
   }
 
-  /**
+    /**
    * Get goals with filters
    */
   async getGoals(
@@ -320,7 +320,7 @@ export class GoalService {
       page?: number;
       limit?: number;
     }
-  ): Promise<{ goals: IGoal[]; total: number; page: number; totalPages: number }> {
+  ): Promise<{ goals: IGoal[]; total: number; page: number; limit: number; totalPages: number }> {
     try {
       const query: any = { userId };
 
@@ -345,6 +345,7 @@ export class GoalService {
         goals,
         total,
         page,
+        limit,
         totalPages: Math.ceil(total / limit),
       };
     } catch (error: any) {
