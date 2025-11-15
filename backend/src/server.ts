@@ -1,64 +1,56 @@
-import { buildApp } from './app';
-import { validateEnv, getEnv } from './config/env';
-import { startCronJobs } from './jobs';
+// src/server.ts
+import { buildApp } from './app.js';
+import { validateEnv } from './config/env.js';
+import { startCronJobs } from './jobs/index.js';
+import { logger } from './utils/logger.js';
 
 async function start() {
   try {
-    // Validate environment variables first
     validateEnv();
-    const env = getEnv();
 
-    // Build Fastify app
-    const fastify = await buildApp();
+    const app = await buildApp();
 
-    // Start background jobs
-    startCronJobs();
+    startCronJobs(app);
 
-    // Start HTTP server
-    await fastify.listen({
-      port: env.PORT,
-      host: env.HOST,
+    const address = await app.listen({
+      port: Number(process.env.PORT) || 3001,
+      host: process.env.HOST || '0.0.0.0',
     });
 
-    // Success banner
-    console.log('');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('🚀 Finance Tracker API Started Successfully!');
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log(`📍 Environment:  ${env.NODE_ENV}`);
-    console.log(`🌐 Server:       http://${env.HOST}:${env.PORT}`);
-    console.log(`💾 Database:     ${env.MONGODB_DB_NAME}`);
-    console.log(`🔒 CORS:         ${env.FRONTEND_URL}`);
-    console.log(`📊 API Docs:     http://${env.HOST}:${env.PORT}/documentation`);
-    console.log('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
-    console.log('');
+    logger.info(
+      {
+        address,
+        env: process.env.NODE_ENV,
+        db: process.env.MONGODB_DB_NAME,
+        cors: process.env.FRONTEND_URL,
+      },
+      'Finance Tracker API Started'
+    );
 
     // Graceful shutdown
-    const signals: NodeJS.Signals[] = ['SIGINT', 'SIGTERM'];
-    signals.forEach((signal) => {
+    const signals = ['SIGINT', 'SIGTERM'] as const;
+    for (const signal of signals) {
       process.on(signal, async () => {
-        console.log(`\n📭 Received ${signal}, shutting down gracefully...`);
-        await fastify.close();
-        console.log('✅ Server closed');
+        logger.warn(`Received ${signal}. Shutting down...`);
+        await app.close();
+        logger.info('Server closed gracefully');
         process.exit(0);
       });
-    });
-  } catch (error) {
-    console.error('❌ Failed to start server:', error);
+    }
+  } catch (err) {
+    logger.error(err, 'Failed to start server');
     process.exit(1);
   }
 }
 
-// Global error handlers (critical for production)
-process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+process.on('unhandledRejection', (reason) => {
+  logger.error({ reason }, 'Unhandled Rejection');
   process.exit(1);
 });
 
-process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
+process.on('uncaughtException', (err) => {
+  logger.error(err, 'Uncaught Exception');
   process.exit(1);
 });
 
-// Start the app
 start();
