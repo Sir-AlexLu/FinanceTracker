@@ -6,6 +6,7 @@ import {
   MakeLiabilityPaymentInput,
   GetLiabilitiesQuery,
 } from '../schemas/liability.schema';
+import { LiabilityQueryParams } from '../types/query.types';
 import { successResponse, errorResponse, paginatedResponse } from '../utils/responseFormatter';
 
 export class LiabilityController {
@@ -23,7 +24,7 @@ export class LiabilityController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const data = request.body;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -50,7 +51,7 @@ export class LiabilityController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const liabilityId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -83,11 +84,11 @@ export class LiabilityController {
    * Get liabilities with filters
    */
   async getLiabilities(
-    request: FastifyRequest<{ Querystring: any }>,
+    request: FastifyRequest<{ Querystring: LiabilityQueryParams }>,
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const filters = {
         status: request.query.status,
         page: request.query.page ? parseInt(request.query.page) : 1,
@@ -113,7 +114,7 @@ export class LiabilityController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const liabilityId = request.params.id;
 
       const liability = await this.liabilityService.getLiabilityById(userId, liabilityId);
@@ -133,7 +134,7 @@ export class LiabilityController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const liabilityId = request.params.id;
       const data = request.body;
       const ipAddress = request.ip;
@@ -162,7 +163,7 @@ export class LiabilityController {
     reply: FastifyReply
   ): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
       const liabilityId = request.params.id;
       const ipAddress = request.ip;
       const userAgent = request.headers['user-agent'] || 'unknown';
@@ -181,7 +182,7 @@ export class LiabilityController {
    */
   async getLiabilitySummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
     try {
-      const userId = request.user!.userId;
+      const userId = request.user.userId;
 
       const summary = await this.liabilityService.getLiabilitySummary(userId);
 
@@ -191,4 +192,4 @@ export class LiabilityController {
       reply.status(400).send(errorResponse(error.message));
     }
   }
-}
+  }
