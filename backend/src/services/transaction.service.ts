@@ -79,12 +79,18 @@ export class TransactionService {
     }
   }
 
-  private updateGoalsAsync(userId: string, tx: ITransaction) {
+  private async updateGoalsAsync(userId: string, tx: ITransaction) {
     const accounts = [tx.accountId];
     if (tx.destinationAccountId) accounts.push(tx.destinationAccountId);
 
-    accounts.forEach(id => this.goalService.updateLinkedGoals(userId, id.toString()).catch(err =>
-      logger.error({ userId, accountId: id, err }, 'Goal update failed')));
+    // Updated to use async/await in a loop for cleaner error handling
+    for (const id of accounts) {
+      try {
+        await this.goalService.updateLinkedGoals(userId, id.toString());
+      } catch (err) {
+        logger.error({ userId, accountId: id, err }, 'Goal update failed');
+      }
+    }
   }
 
   async getAll(userId: string, filters: any) {
