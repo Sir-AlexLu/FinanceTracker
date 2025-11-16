@@ -51,6 +51,13 @@
   }
 }
 
+/* ADD THIS BLOCK */
+@layer components {
+  .border-border {
+    @apply border-border;
+  }
+}
+
 @layer base {
   * {
     @apply border-border;
@@ -114,4 +121,3 @@
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/70;
 }
-    
