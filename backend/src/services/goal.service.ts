@@ -1,509 +1,204 @@
-import { Goal, IGoal, GoalType } from '../models/Goal';
-import { Account } from '../models/Account';
-import { Liability } from '../models/Liability';
-import { Transaction } from '../models/Transaction';
-import { Notification, NotificationType, NotificationPriority } from '../models/Notification';
-import { AuditLog, AuditAction } from '../models/AuditLog';
-import { ExpenseCategory, TransactionType } from '../types/models.types';
-import { addMonths } from '../utils/dateHelpers';
-import mongoose from 'mongoose';
+// src/services/goal.service.ts
+import { Goal, IGoal, GoalType } from '../models/Goal.js';
+import { Account } from '../models/Account.js';
+import { Liability } from '../models/Liability.js';
+import { Transaction } from '../models/Transaction.js';
+import { Notification } from '../models/Notification.js';
+import { logger } from '../utils/logger.js';
+import type { ExpenseCategory } from '../types/models.types.js';
 
 export class GoalService {
-  /**
-   * Create a new goal
-   */
-  async createGoal(
-    userId: string,
-    data: {
-      name: string;
-      type: GoalType;
-      description?: string;
-      targetAmount: number;
-      targetDate: string;
-      linkedAccountId?: string;
-      linkedLiabilityId?: string;
-      linkedCategory?: ExpenseCategory;
-      reminderFrequency?: 'weekly' | 'monthly' | 'none';
-      notes?: string;
-    },
-    ipAddress: string,
-    userAgent: string
-  ): Promise<IGoal> {
-    try {
-      // Validate linked resources based on goal type
-      if (data.type === GoalType.SAVINGS || data.type === GoalType.INVESTMENT) {
-        if (!data.linkedAccountId) {
-          throw new Error(`${data.type} goals must have a linked account`);
-        }
+  async create(userId: string, data: CreateGoalInput, ip: string, ua: string): Promise<IGoal> {
+    // Validate linked resources
+    if ([GoalType.SAVINGS, GoalType.INVESTMENT].includes(data.type)) {
+      const acc = await Account.findOne({ _id: data.linkedAccountId, userId, isActive: true });
+      if (!acc) throw new Error('Linked account not found');
+    }
 
-        const account = await Account.findOne({
-          _id: data.linkedAccountId,
-          userId,
-          isActive: true,
-        });
+    if (data.type === GoalType.DEBT_PAYOFF) {
+      const liab = await Liability.findOne({ _id: data.linkedLiabilityId, userId, status: { $ne: 'fully_paid' } });
+      if (!liab) throw new Error('Linked liability not found');
+    }
 
-        if (!account) {
-          throw new Error('Linked account not found or inactive');
-        }
-      }
+    const current = await this.calcCurrent(userId, data);
+    const milestones = [25, 50, 75, 100].map(p => ({
+      percentage: p,
+      amount: data.targetAmount * p / 100,
+      targetDate: this.milestoneDate(new Date(), new Date(data.targetDate), p),
+      isAchieved: current >= data.targetAmount * p / 100,
+    }));
 
-      if (data.type === GoalType.DEBT_PAYOFF) {
-        if (!data.linkedLiabilityId) {
-          throw new Error('Debt payoff goals must have a linked liability');
-        }
+    const goal = await Goal.create({
+      userId,
+      ...data,
+      currentAmount: current,
+      milestones,
+      progress: { projectedCompletionDate: new Date(data.targetDate) },
+    });
 
-        const liability = await Liability.findOne({
-          _id: data.linkedLiabilityId,
-          userId,
-          status: { $ne: 'fully_paid' },
-        });
+    logger.info({ userId, goalId: goal._id, type: goal.type, ip, ua }, 'Goal created');
+    return goal;
+  }
 
-        if (!liability) {
-          throw new Error('Linked liability not found or already paid');
-        }
-      }
+  private milestoneDate(start: Date, end: Date, pct: number): Date {
+    const total = end.getTime() - start.getTime();
+    return new Date(start.getTime() + total * pct / 100);
+  }
 
-      if (data.type === GoalType.EXPENSE_REDUCTION) {
-        if (!data.linkedCategory) {
-          throw new Error('Expense reduction goals must have a linked category');
-        }
-      }
+  private async calcCurrent(userId: string, data: any): Promise<number> {
+    switch (data.type) {
+      case GoalType.SAVINGS:
+      case GoalType.INVESTMENT:
+        const acc = await Account.findById(data.linkedAccountId);
+        return acc?.balance || 0;
+      case GoalType.DEBT_PAYOFF:
+        const liab = await Liability.findById(data.linkedLiabilityId);
+        return liab?.paidAmount || 0;
+      default:
+        return 0;
+    }
+  }
 
-      // Calculate initial progress
-      const currentAmount = await this.calculateCurrentAmount(userId, data);
+  async updateProgress(goalId: string): Promise<IGoal> {
+    const goal = await Goal.findById(goalId);
+    if (!goal) throw new Error('Goal not found');
 
-      // Create milestones (25%, 50%, 75%, 100%)
-      const milestones = [25, 50, 75, 100].map((percentage) => ({
-        percentage,
-        amount: (data.targetAmount * percentage) / 100,
-        targetDate: this.calculateMilestoneDate(
-          new Date(),
-          new Date(data.targetDate),
-          percentage
-        ),
-        isAchieved: false,
-      }));
+    const current = await this.calcCurrentForGoal(goal);
+    goal.currentAmount = current;
+    await goal.save();
 
-      const goalData = {
-        userId,
-        name: data.name,
-        type: data.type,
-        description: data.description,
-        targetAmount: data.targetAmount,
-        currentAmount,
-        startDate: new Date(),
-        targetDate: new Date(data.targetDate),
-        linkedAccountId: data.linkedAccountId,
-        linkedLiabilityId: data.linkedLiabilityId,
-        linkedCategory: data.linkedCategory,
-        progress: {
-          percentage: 0,
-          monthlyTarget: 0,
-          monthlyContribution: 0,
-          isOnTrack: true,
-          projectedCompletionDate: new Date(data.targetDate),
-        },
-        milestones,
-        status: 'active',
-        reminderFrequency: data.reminderFrequency || 'monthly',
-        notes: data.notes,
-      };
-
-      const goal = await Goal.create(goalData);
-
-      // Progress will be calculated in pre-save hook
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.GOAL_CREATE,
-        resource: 'Goal',
-        resourceId: goal._id,
-        details: {
-          name: goal.name,
-          type: goal.type,
-          targetAmount: goal.targetAmount,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 201,
+    // Notify on new milestones
+    const newMilestones = goal.milestones.filter(m => m.isAchieved && !m.achievedDate);
+    for (const m of newMilestones) {
+      await Notification.create({
+        userId: goal.userId,
+        type: 'GOAL_MILESTONE',
+        title: `Milestone ${m.percentage}% Achieved!`,
+        message: `You've hit ${m.percentage}% of "${goal.name}"`,
+        priority: 'MEDIUM',
+        actionUrl: `/goals/${goal._id}`,
+        relatedResourceId: goal._id,
       });
-
-      return goal;
-    } catch (error: any) {
-      throw new Error(`Failed to create goal: ${error.message}`);
     }
-  }
 
-  /**
-   * Calculate current amount based on goal type
-   */
-  private async calculateCurrentAmount(
-    userId: string,
-    data: {
-      type: GoalType;
-      linkedAccountId?: string;
-      linkedLiabilityId?: string;
-      linkedCategory?: ExpenseCategory;
-      targetAmount: number;
-    }
-  ): Promise<number> {
-    try {
-      switch (data.type) {
-        case GoalType.SAVINGS:
-        case GoalType.INVESTMENT: {
-          if (!data.linkedAccountId) return 0;
-          const account = await Account.findById(data.linkedAccountId);
-          return account?.balance || 0;
-        }
-
-        case GoalType.DEBT_PAYOFF: {
-          if (!data.linkedLiabilityId) return 0;
-          const liability = await Liability.findById(data.linkedLiabilityId);
-          return liability?.paidAmount || 0;
-        }
-
-        case GoalType.EXPENSE_REDUCTION: {
-          // For expense reduction, target is reduction amount, current is amount saved
-          // This needs baseline calculation - for now return 0
-          return 0;
-        }
-
-        default:
-          return 0;
-      }
-    } catch (error: any) {
-      return 0;
-    }
-  }
-
-  /**
-   * Calculate milestone target date
-   */
-  private calculateMilestoneDate(startDate: Date, endDate: Date, percentage: number): Date {
-    const totalDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
-    const daysToMilestone = (totalDays * percentage) / 100;
-    const milestoneDate = new Date(startDate);
-    milestoneDate.setDate(milestoneDate.getDate() + daysToMilestone);
-    return milestoneDate;
-  }
-
-  /**
-   * Update goal progress
-   */
-  async updateGoalProgress(goalId: string): Promise<IGoal> {
-    try {
-      const goal = await Goal.findById(goalId);
-
-      if (!goal) {
-        throw new Error('Goal not found');
-      }
-
-      // Calculate current amount based on goal type
-      const currentAmount = await this.calculateCurrentAmountForGoal(goal);
-
-      goal.currentAmount = currentAmount;
-
-      // Progress metrics will be auto-calculated in pre-save hook
-      await goal.save();
-
-      // Check if milestones achieved
-      const achievedMilestones = goal.milestones.filter(
-        (m) => m.isAchieved && !m.achievedDate
-      );
-
-      // Send notifications for newly achieved milestones
-      for (const milestone of achievedMilestones) {
-        await Notification.create({
-          userId: goal.userId,
-          type: NotificationType.GOAL_MILESTONE,
-          title: `Goal Milestone Achieved! 🎉`,
-          message: `Congratulations! You've reached ${milestone.percentage}% of your goal "${goal.name}"`,
-          priority: NotificationPriority.MEDIUM,
-          isRead: false,
-          actionUrl: `/goals/${goal._id}`,
-          relatedResourceId: goal._id,
-          relatedResourceType: 'Goal',
-        });
-      }
-
-      // Check if goal completed
-      if (goal.status === 'completed' && !goal.completedAt) {
-        await Notification.create({
-          userId: goal.userId,
-          type: NotificationType.GOAL_MILESTONE,
-          title: `Goal Completed! 🎊`,
-          message: `Amazing! You've completed your goal "${goal.name}"!`,
-          priority: NotificationPriority.HIGH,
-          isRead: false,
-          actionUrl: `/goals/${goal._id}`,
-          relatedResourceId: goal._id,
-          relatedResourceType: 'Goal',
-        });
-      }
-
-      return goal;
-    } catch (error: any) {
-      throw new Error(`Failed to update goal progress: ${error.message}`);
-    }
-  }
-
-  /**
-   * Calculate current amount for existing goal
-   */
-  private async calculateCurrentAmountForGoal(goal: IGoal): Promise<number> {
-    try {
-      switch (goal.type) {
-        case GoalType.SAVINGS:
-        case GoalType.INVESTMENT: {
-          if (!goal.linkedAccountId) return goal.currentAmount;
-          const account = await Account.findById(goal.linkedAccountId);
-          return account?.balance || goal.currentAmount;
-        }
-
-        case GoalType.DEBT_PAYOFF: {
-          if (!goal.linkedLiabilityId) return goal.currentAmount;
-          const liability = await Liability.findById(goal.linkedLiabilityId);
-          return liability?.paidAmount || goal.currentAmount;
-        }
-
-        case GoalType.EXPENSE_REDUCTION: {
-          if (!goal.linkedCategory) return goal.currentAmount;
-
-          // Calculate spending reduction
-          const now = new Date();
-          const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-          const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-
-          const currentMonthSpending = await Transaction.find({
-            userId: goal.userId,
-            type: TransactionType.EXPENSE,
-            expenseCategory: goal.linkedCategory,
-            date: { $gte: monthStart, $lte: monthEnd },
-          }).then((transactions) =>
-            transactions.reduce((sum, t) => sum + t.amount, 0)
-          );
-
-          // Get baseline (previous month or initial)
-          const prevMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-          const prevMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0);
-
-          const baselineSpending = await Transaction.find({
-            userId: goal.userId,
-            type: TransactionType.EXPENSE,
-            expenseCategory: goal.linkedCategory,
-            date: { $gte: prevMonthStart, $lte: prevMonthEnd },
-          }).then((transactions) =>
-            transactions.reduce((sum, t) => sum + t.amount, 0)
-          );
-
-          const reduction = Math.max(0, baselineSpending - currentMonthSpending);
-          return reduction;
-        }
-
-        default:
-          return goal.currentAmount;
-      }
-    } catch (error: any) {
-      return goal.currentAmount;
-    }
-  }
-
-    /**
-   * Get goals with filters
-   */
-  async getGoals(
-    userId: string,
-    filters: {
-      status?: 'active' | 'completed' | 'abandoned' | 'paused';
-      type?: GoalType;
-      page?: number;
-      limit?: number;
-    }
-  ): Promise<{ goals: IGoal[]; total: number; page: number; limit: number; totalPages: number }> {
-    try {
-      const query: any = { userId };
-
-      if (filters.status) query.status = filters.status;
-      if (filters.type) query.type = filters.type;
-
-      const page = filters.page || 1;
-      const limit = filters.limit || 20;
-      const skip = (page - 1) * limit;
-
-      const [goals, total] = await Promise.all([
-        Goal.find(query)
-          .sort({ createdAt: -1 })
-          .skip(skip)
-          .limit(limit)
-          .populate('linkedAccountId', 'name type')
-          .populate('linkedLiabilityId', 'description creditor'),
-        Goal.countDocuments(query),
-      ]);
-
-      return {
-        goals,
-        total,
-        page,
-        limit,
-        totalPages: Math.ceil(total / limit),
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to fetch goals: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get goal by ID
-   */
-  async getGoalById(userId: string, goalId: string): Promise<IGoal> {
-    try {
-      const goal = await Goal.findOne({ _id: goalId, userId })
-        .populate('linkedAccountId', 'name type balance')
-        .populate('linkedLiabilityId', 'description creditor totalAmount paidAmount');
-
-      if (!goal) {
-        throw new Error('Goal not found');
-      }
-
-      return goal;
-    } catch (error: any) {
-      throw new Error(`Failed to fetch goal: ${error.message}`);
-    }
-  }
-
-  /**
-   * Update goal
-   */
-  async updateGoal(
-    userId: string,
-    goalId: string,
-    data: {
-      name?: string;
-      description?: string;
-      targetAmount?: number;
-      targetDate?: string;
-      status?: 'active' | 'completed' | 'abandoned' | 'paused';
-      reminderFrequency?: 'weekly' | 'monthly' | 'none';
-      notes?: string;
-    },
-    ipAddress: string,
-    userAgent: string
-  ): Promise<IGoal> {
-    try {
-      const goal = await Goal.findOne({ _id: goalId, userId });
-
-      if (!goal) {
-        throw new Error('Goal not found');
-      }
-
-      // Update fields
-      if (data.name) goal.name = data.name;
-      if (data.description !== undefined) goal.description = data.description;
-      if (data.targetAmount) goal.targetAmount = data.targetAmount;
-      if (data.targetDate) goal.targetDate = new Date(data.targetDate);
-      if (data.status) goal.status = data.status;
-      if (data.reminderFrequency) goal.reminderFrequency = data.reminderFrequency;
-      if (data.notes !== undefined) goal.notes = data.notes;
-
-      await goal.save();
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: data.status === 'completed' ? AuditAction.GOAL_COMPLETE : AuditAction.GOAL_UPDATE,
-        resource: 'Goal',
-        resourceId: goal._id,
-        details: { changes: data },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
+    if (goal.status === 'completed' && !goal.completedAt) {
+      await Notification.create({
+        userId: goal.userId,
+        type: 'GOAL_COMPLETED',
+        title: `Goal Completed: ${goal.name}`,
+        message: `You've achieved your goal!`,
+        priority: 'HIGH',
+        actionUrl: `/goals/${goal._id}`,
+        relatedResourceId: goal._id,
       });
+    }
 
-      return goal;
-    } catch (error: any) {
-      throw new Error(`Failed to update goal: ${error.message}`);
+    return goal;
+  }
+
+  private async calcCurrentForGoal(goal: IGoal): Promise<number> {
+    switch (goal.type) {
+      case GoalType.SAVINGS:
+      case GoalType.INVESTMENT:
+        const acc = await Account.findById(goal.linkedAccountId);
+        return acc?.balance || goal.currentAmount;
+      case GoalType.DEBT_PAYOFF:
+        const liab = await Liability.findById(goal.linkedLiabilityId);
+        return liab?.paidAmount || goal.currentAmount;
+      case GoalType.EXPENSE_REDUCTION:
+        const now = new Date();
+        const [curr, prev] = await Promise.all([
+          this.monthSpending(goal.userId, goal.linkedCategory!, now.getMonth(), now.getFullYear()),
+          this.monthSpending(goal.userId, goal.linkedCategory!, now.getMonth() - 1, now.getFullYear())
+        ]);
+        return Math.max(0, prev - curr);
+      default:
+        return goal.currentAmount;
     }
   }
 
-  /**
-   * Delete goal
-   */
-  async deleteGoal(
-    userId: string,
-    goalId: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
-    try {
-      const goal = await Goal.findOne({ _id: goalId, userId });
-
-      if (!goal) {
-        throw new Error('Goal not found');
-      }
-
-      await Goal.findByIdAndDelete(goalId);
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.GOAL_DELETE,
-        resource: 'Goal',
-        resourceId: goal._id,
-        details: {
-          name: goal.name,
-          type: goal.type,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-    } catch (error: any) {
-      throw new Error(`Failed to delete goal: ${error.message}`);
-    }
+  private async monthSpending(userId: string, cat: ExpenseCategory, month: number, year: number): Promise<number> {
+    const start = new Date(year, month, 1);
+    const end = new Date(year, month + 1, 0);
+    const txs = await Transaction.find({
+      userId,
+      type: 'EXPENSE',
+      expenseCategory: cat,
+      date: { $gte: start, $lte: end },
+    });
+    return txs.reduce((s, t) => s + t.amount, 0);
   }
 
-  /**
-   * Get goal summary
-   */
-  async getGoalSummary(userId: string): Promise<{
-    activeGoals: number;
-    completedGoals: number;
-    totalTargetAmount: number;
-    totalCurrentAmount: number;
-    overallProgress: number;
-  }> {
-    try {
-      const goals = await Goal.find({ userId });
+  async getAll(userId: string, filters: any) {
+    const query: any = { userId };
+    if (filters.status) query.status = filters.status;
+    if (filters.type) query.type = filters.type;
 
-      let activeGoals = 0;
-      let completedGoals = 0;
-      let totalTargetAmount = 0;
-      let totalCurrentAmount = 0;
+    const page = filters.page || 1;
+    const limit = Math.min(filters.limit || 20, 100);
+    const skip = (page - 1) * limit;
 
-      goals.forEach((goal) => {
-        if (goal.status === 'active') {
-          activeGoals++;
-          totalTargetAmount += goal.targetAmount;
-          totalCurrentAmount += goal.currentAmount;
-        }
-        if (goal.status === 'completed') {
-          completedGoals++;
-        }
-      });
+    const [goals, total] = await Promise.all([
+      Goal.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit)
+        .populate('linkedAccountId', 'name type')
+        .populate('linkedLiabilityId', 'description creditor'),
+      Goal.countDocuments(query),
+    ]);
 
-      const overallProgress =
-        totalTargetAmount > 0 ? (totalCurrentAmount / totalTargetAmount) * 100 : 0;
+    return { goals, total, page, limit, totalPages: Math.ceil(total / limit) };
+  }
 
-      return {
-        activeGoals,
-        completedGoals,
-        totalTargetAmount,
-        totalCurrentAmount,
-        overallProgress,
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to get goal summary: ${error.message}`);
+  async getById(userId: string, id: string): Promise<IGoal> {
+    const goal = await Goal.findOne({ _id: id, userId })
+      .populate('linkedAccountId', 'name type balance')
+      .populate('linkedLiabilityId', 'description creditor totalAmount paidAmount');
+    if (!goal) throw new Error('Goal not found');
+    return goal;
+  }
+
+  async update(userId: string, id: string, data: UpdateGoalInput, ip: string, ua: string): Promise<IGoal> {
+    const goal = await Goal.findOne({ _id: id, userId });
+    if (!goal) throw new Error('Goal not found');
+
+    Object.assign(goal, data);
+    await goal.save();
+
+    logger.info({ userId, goalId: id, changes: data, ip, ua }, 'Goal updated');
+    return goal;
+  }
+
+  async delete(userId: string, id: string, ip: string, ua: string): Promise<void> {
+    const goal = await Goal.findOne({ _id: id, userId });
+    if (!goal) throw new Error('Goal not found');
+    await Goal.findByIdAndDelete(id);
+    logger.info({ userId, goalId: id, ip, ua }, 'Goal deleted');
+  }
+
+  async getSummary(userId: string) {
+    const goals = await Goal.find({ userId });
+    const active = goals.filter(g => g.status === 'active');
+    const totalTarget = active.reduce((s, g) => s + g.targetAmount, 0);
+    const totalCurrent = active.reduce((s, g) => s + g.currentAmount, 0);
+
+    return {
+      activeGoals: active.length,
+      completedGoals: goals.filter(g => g.status === 'completed').length,
+      totalTargetAmount: totalTarget,
+      totalCurrentAmount: totalCurrent,
+      overallProgress: totalTarget > 0 ? (totalCurrent / totalTarget) * 100 : 0,
+    };
+  }
+
+  // Called from TransactionService
+  async updateLinkedGoals(userId: string, accountId: string): Promise<void> {
+    const goals = await Goal.find({
+      userId,
+      linkedAccountId: accountId,
+      status: 'active',
+    });
+
+    for (const goal of goals) {
+      await this.updateProgress(goal._id.toString()).catch(() => {});
     }
   }
 }
