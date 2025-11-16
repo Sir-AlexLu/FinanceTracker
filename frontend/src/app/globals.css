@@ -4,6 +4,9 @@
 
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
+/* ──────────────────────────────────────────────────────────────
+   1. Define CSS Variables (HSL values)
+   ────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -51,13 +54,39 @@
   }
 }
 
-/* ADD THIS BLOCK */
+/* ──────────────────────────────────────────────────────────────
+   2. Define Tailwind Classes from CSS Variables
+   ────────────────────────────────────────────────────────────── */
 @layer components {
-  .border-border {
-    @apply border-border;
-  }
+  .bg-background { @apply bg-[hsl(var(--background))]; }
+  .bg-foreground { @apply bg-[hsl(var(--foreground))]; }
+  .bg-card { @apply bg-[hsl(var(--card))]; }
+  .bg-card-foreground { @apply bg-[hsl(var(--card-foreground))]; }
+  .bg-popover { @apply bg-[hsl(var(--popover))]; }
+  .bg-popover-foreground { @apply bg-[hsl(var(--popover-foreground))]; }
+  .bg-primary { @apply bg-[hsl(var(--primary))]; }
+  .bg-primary-foreground { @apply bg-[hsl(var(--primary-foreground))]; }
+  .bg-secondary { @apply bg-[hsl(var(--secondary))]; }
+  .bg-secondary-foreground { @apply bg-[hsl(var(--secondary-foreground))]; }
+  .bg-muted { @apply bg-[hsl(var(--muted))]; }
+  .bg-muted-foreground { @apply bg-[hsl(var(--muted-foreground))]; }
+  .bg-accent { @apply bg-[hsl(var(--accent))]; }
+  .bg-accent-foreground { @apply bg-[hsl(var(--accent-foreground))]; }
+  .bg-destructive { @apply bg-[hsl(var(--destructive))]; }
+  .bg-destructive-foreground { @apply bg-[hsl(var(--destructive-foreground))]; }
+
+  .text-foreground { @apply text-[hsl(var(--foreground))]; }
+  .text-primary { @apply text-[hsl(var(--primary))]; }
+  .text-primary-foreground { @apply text-[hsl(var(--primary-foreground))]; }
+  .text-muted-foreground { @apply text-[hsl(var(--muted-foreground))]; }
+
+  .border-border { @apply border-[hsl(var(--border))]; }
+  .ring-ring { @apply ring-[hsl(var(--ring))]; }
 }
 
+/* ──────────────────────────────────────────────────────────────
+   3. Apply to Base Elements
+   ────────────────────────────────────────────────────────────── */
 @layer base {
   * {
     @apply border-border;
@@ -70,7 +99,9 @@
   }
 }
 
-/* Custom utilities for neumorphism */
+/* ──────────────────────────────────────────────────────────────
+   4. Custom Utilities (Neumorphism, Scrollbar, etc.)
+   ────────────────────────────────────────────────────────────── */
 @layer utilities {
   .glass-neumorph {
     @apply bg-card border border-border rounded-2xl backdrop-blur-sm;
@@ -98,7 +129,6 @@
     text-wrap: balance;
   }
   
-  /* Hide scrollbar but keep functionality */
   .scrollbar-hide {
     -ms-overflow-style: none;
     scrollbar-width: none;
@@ -108,7 +138,7 @@
   }
 }
 
-/* Custom scrollbar */
+/* Custom Scrollbar */
 ::-webkit-scrollbar {
   width: 8px;
 }
@@ -120,4 +150,4 @@
 }
 ::-webkit-scrollbar-thumb:hover {
   @apply bg-muted-foreground/70;
-}
+    }
