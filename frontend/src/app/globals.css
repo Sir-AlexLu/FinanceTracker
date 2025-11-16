@@ -5,7 +5,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Space+Grotesk:wght@400;500;600;700&display=swap');
 
 /* ──────────────────────────────────────────────────────────────
-   1. Define CSS Variables (HSL values)
+   1. CSS Variables
    ────────────────────────────────────────────────────────────── */
 @layer base {
   :root {
@@ -55,15 +55,13 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   2. Define Tailwind Classes from CSS Variables
+   2. Tailwind Classes from CSS Vars
    ────────────────────────────────────────────────────────────── */
 @layer components {
   .bg-background { @apply bg-[hsl(var(--background))]; }
   .bg-foreground { @apply bg-[hsl(var(--foreground))]; }
   .bg-card { @apply bg-[hsl(var(--card))]; }
   .bg-card-foreground { @apply bg-[hsl(var(--card-foreground))]; }
-  .bg-popover { @apply bg-[hsl(var(--popover))]; }
-  .bg-popover-foreground { @apply bg-[hsl(var(--popover-foreground))]; }
   .bg-primary { @apply bg-[hsl(var(--primary))]; }
   .bg-primary-foreground { @apply bg-[hsl(var(--primary-foreground))]; }
   .bg-secondary { @apply bg-[hsl(var(--secondary))]; }
@@ -71,9 +69,7 @@
   .bg-muted { @apply bg-[hsl(var(--muted))]; }
   .bg-muted-foreground { @apply bg-[hsl(var(--muted-foreground))]; }
   .bg-accent { @apply bg-[hsl(var(--accent))]; }
-  .bg-accent-foreground { @apply bg-[hsl(var(--accent-foreground))]; }
   .bg-destructive { @apply bg-[hsl(var(--destructive))]; }
-  .bg-destructive-foreground { @apply bg-[hsl(var(--destructive-foreground))]; }
 
   .text-foreground { @apply text-[hsl(var(--foreground))]; }
   .text-primary { @apply text-[hsl(var(--primary))]; }
@@ -85,7 +81,7 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   3. Apply to Base Elements
+   3. Base Styles
    ────────────────────────────────────────────────────────────── */
 @layer base {
   * {
@@ -100,54 +96,36 @@
 }
 
 /* ──────────────────────────────────────────────────────────────
-   4. Custom Utilities (Neumorphism, Scrollbar, etc.)
+   4. Custom Utilities
    ────────────────────────────────────────────────────────────── */
 @layer utilities {
   .glass-neumorph {
     @apply bg-card border border-border rounded-2xl backdrop-blur-sm;
-    box-shadow: 
-      0 8px 32px 0 rgba(0, 0, 0, 0.1),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.6);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.1), inset 0 0 0 1px rgba(255,255,255,0.6);
+    transition: all 0.3s cubic-bezier(0.4,0,0.2,1);
   }
-  
   .glass-neumorph-dark {
     @apply dark:bg-card dark:border-border;
-    box-shadow: 
-      0 8px 32px 0 rgba(0, 0, 0, 0.3),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px 0 rgba(0,0,0,0.3), inset 0 0 0 1px rgba(255,255,255,0.05);
   }
-
   .glass-neumorph:hover {
     transform: translateY(-2px);
-    box-shadow: 
-      0 12px 40px 0 rgba(0, 0, 0, 0.15),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+    box-shadow: 0 12px 40px 0 rgba(0,0,0,0.15), inset 0 0 0 1px rgba(255,255,255,0.8);
   }
-
-  .text-balance {
-    text-wrap: balance;
-  }
-  
-  .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
-  }
-  .scrollbar-hide::-webkit-scrollbar {
-    display: none;
-  }
+  .text-balance { text-wrap: balance; }
+  .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+  .scrollbar-hide::-webkit-scrollbar { display: none; }
 }
 
-/* Custom Scrollbar */
-::-webkit-scrollbar {
-  width: 8px;
-}
-::-webkit-scrollbar-track {
-  @apply bg-muted;
-}
+/* ──────────────────────────────────────────────────────────────
+   5. Custom Scrollbar (NO @apply for opacity)
+   ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { @apply bg-muted; }
 ::-webkit-scrollbar-thumb {
-  @apply bg-muted-foreground/50 rounded-full;
+  background: hsl(var(--muted-foreground) / 0.5);
+  @apply rounded-full;
 }
 ::-webkit-scrollbar-thumb:hover {
-  @apply bg-muted-foreground/70;
-    }
+  background: hsl(var(--muted-foreground) / 0.7);
+}
