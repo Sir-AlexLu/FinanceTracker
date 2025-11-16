@@ -1,100 +1,17 @@
+// src/routes/liability.routes.ts
 import { FastifyInstance } from 'fastify';
-import { LiabilityController } from '../controllers/liability.controller';
-import {
-  createLiabilitySchema,
-  updateLiabilitySchema,
-  makeLiabilityPaymentSchema,
-} from '../schemas/liability.schema';
-import { idParamSchema } from '../schemas/common.schema';
+import { LiabilityController } from '../controllers/liability.controller.js';
+import { createLiabilitySchema, updateLiabilitySchema, makeLiabilityPaymentSchema } from '../schemas/liability.schema.js';
 
 export default async function liabilityRoutes(fastify: FastifyInstance) {
-  const liabilityController = new LiabilityController();
-
-  // All routes require authentication
+  const ctrl = new LiabilityController();
   fastify.addHook('onRequest', fastify.authenticate);
 
-  fastify.post(
-    '/',
-    {
-      schema: {
-        body: createLiabilitySchema,
-        description: 'Create a new liability',
-      },
-    },
-    liabilityController.createLiability.bind(liabilityController)
-  );
-
-  fastify.get(
-    '/',
-    {
-      schema: {
-        description: 'Get liabilities with filters',
-        querystring: {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['active', 'partially_paid', 'fully_paid'] },
-            page: { type: 'number', minimum: 1 },
-            limit: { type: 'number', minimum: 1, maximum: 100 },
-          },
-        },
-      },
-    },
-    liabilityController.getLiabilities.bind(liabilityController)
-  );
-
-  fastify.get(
-    '/summary',
-    {
-      schema: {
-        description: 'Get liability summary',
-      },
-    },
-    liabilityController.getLiabilitySummary.bind(liabilityController)
-  );
-
-  fastify.get(
-    '/:id',
-    {
-      schema: {
-        params: idParamSchema,
-        description: 'Get liability by ID',
-      },
-    },
-    liabilityController.getLiabilityById.bind(liabilityController)
-  );
-
-  fastify.post(
-    '/:id/payment',
-    {
-      schema: {
-        params: idParamSchema,
-        body: makeLiabilityPaymentSchema,
-        description: 'Make a payment towards liability',
-      },
-    },
-    liabilityController.makePayment.bind(liabilityController)
-  );
-
-  fastify.patch(
-    '/:id',
-    {
-      schema: {
-        params: idParamSchema,
-        body: updateLiabilitySchema,
-        description: 'Update liability',
-      },
-    },
-    liabilityController.updateLiability.bind(liabilityController)
-  );
-
-  fastify.delete(
-    '/:id',
-    {
-      schema: {
-        params: idParamSchema,
-        description: 'Delete liability',
-      },
-    },
-    liabilityController.deleteLiability.bind(liabilityController)
-  );
+  fastify.post('/', { schema: { body: createLiabilitySchema } }, ctrl.create);
+  fastify.post('/:id/payment', { schema: { body: makeLiabilityPaymentSchema } }, ctrl.payment);
+  fastify.get('/', ctrl.getAll);
+  fastify.get('/summary', ctrl.summary);
+  fastify.get('/:id', ctrl.getById);
+  fastify.patch('/:id', { schema: { body: updateLiabilitySchema } }, ctrl.update);
+  fastify.delete('/:id', ctrl.delete);
 }
