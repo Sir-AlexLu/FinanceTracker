@@ -1,351 +1,102 @@
-import { Account, IAccount } from '../models/Account';
-import { Transaction } from '../models/Transaction';
-import { AuditLog, AuditAction } from '../models/AuditLog';
-import { GoalService } from './goal.service'; // ADDED
-import { AccountType } from '../types/models.types';
-import { DEFAULT_ACCOUNT_NAMES } from '../config/constants';
-import mongoose from 'mongoose';
+// src/services/account.service.ts
+import { Account, IAccount } from '../models/Account.js';
+import { Transaction } from '../models/Transaction.js';
+import { logger } from '../utils/logger.js';
+import { DEFAULT_ACCOUNT_NAMES } from '../config/constants.js';
+import type { AccountType } from '../types/models.types.js';
 
 export class AccountService {
-  private goalService: GoalService; // ADDED
+  async create(userId: string, data: CreateAccountInput, ip: string, ua: string): Promise<IAccount> {
+    const account = await Account.create({
+      userId,
+      type: data.type,
+      name: data.name || DEFAULT_ACCOUNT_NAMES[data.type],
+      balance: data.balance,
+      openingBalance: data.balance,
+      connection: data.connection,
+      metadata: { defaultName: DEFAULT_ACCOUNT_NAMES[data.type] },
+    });
 
-  constructor() {
-    this.goalService = new GoalService(); // ADDED
+    logger.info({ userId, accountId: account._id, ip, ua }, 'Account created');
+    return account;
   }
 
-  /**
-   * Create a new account
-   */
-  async createAccount(
-    userId: string,
-    data: {
-      type: AccountType;
-      name?: string;
-      balance?: number;
-      connection?: any;
-    },
-    ipAddress: string,
-    userAgent: string
-  ): Promise<IAccount> {
-    try {
-      const accountData: any = {
-        userId,
-        type: data.type,
-        name: data.name || DEFAULT_ACCOUNT_NAMES[data.type],
-        balance: data.balance || 0,
-        openingBalance: data.balance || 0,
-        connection: data.connection,
-        metadata: {
-          defaultName: DEFAULT_ACCOUNT_NAMES[data.type],
-        },
-      };
-
-      const account = await Account.create(accountData);
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.ACCOUNT_CREATE,
-        resource: 'Account',
-        resourceId: account._id,
-        details: {
-          type: account.type,
-          name: account.name,
-          balance: account.balance,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 201,
-      });
-
-      return account;
-    } catch (error: any) {
-      throw new Error(`Failed to create account: ${error.message}`);
-    }
+  async getAll(userId: string, includeInactive = false): Promise<IAccount[]> {
+    return Account.find({ userId, ...(includeInactive ? {} : { isActive: true }) }).sort({ createdAt: -1 });
   }
 
-  /**
-   * Get all accounts for a user
-   */
-  async getAccounts(userId: string, includeInactive: boolean = false): Promise<IAccount[]> {
-    try {
-      const query: any = { userId };
-
-      if (!includeInactive) {
-        query.isActive = true;
-      }
-
-      const accounts = await Account.find(query).sort({ createdAt: -1 });
-
-      return accounts;
-    } catch (error: any) {
-      throw new Error(`Failed to fetch accounts: ${error.message}`);
-    }
+  async getById(userId: string, id: string): Promise<IAccount> {
+    const account = await Account.findOne({ _id: id, userId });
+    if (!account) throw new Error('Account not found');
+    return account;
   }
 
-  /**
-   * Get account by ID
-   */
-  async getAccountById(userId: string, accountId: string): Promise<IAccount> {
-    try {
-      const account = await Account.findOne({
-        _id: accountId,
-        userId,
-      });
+  async update(userId: string, id: string, data: UpdateAccountInput, ip: string, ua: string): Promise<IAccount> {
+    const account = await Account.findOne({ _id: id, userId });
+    if (!account) throw new Error('Account not found');
 
-      if (!account) {
-        throw new Error('Account not found');
-      }
+    Object.assign(account, data);
+    await account.save();
 
-      return account;
-    } catch (error: any) {
-      throw new Error(`Failed to fetch account: ${error.message}`);
-    }
+    logger.info({ userId, accountId: id, changes: data, ip, ua }, 'Account updated');
+    return account;
   }
 
-  /**
-   * Update account
-   */
-  async updateAccount(
-    userId: string,
-    accountId: string,
-    data: {
-      name?: string;
-      connection?: any;
-      isActive?: boolean;
-    },
-    ipAddress: string,
-    userAgent: string
-  ): Promise<IAccount> {
-    try {
-      const account = await Account.findOne({ _id: accountId, userId });
+  async delete(userId: string, id: string, ip: string, ua: string): Promise<void> {
+    const account = await Account.findOne({ _id: id, userId });
+    if (!account) throw new Error('Account not found');
 
-      if (!account) {
-        throw new Error('Account not found');
-      }
+    const txCount = await Transaction.countDocuments({ $or: [{ accountId: id }, { destinationAccountId: id }] });
 
-      // Update fields
-      if (data.name !== undefined) account.name = data.name;
-      if (data.connection !== undefined) account.connection = data.connection;
-      if (data.isActive !== undefined) account.isActive = data.isActive;
-
+    if (txCount > 0) {
+      account.isActive = false;
       await account.save();
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: data.isActive === false ? AuditAction.ACCOUNT_DEACTIVATE : AuditAction.ACCOUNT_UPDATE,
-        resource: 'Account',
-        resourceId: account._id,
-        details: {
-          changes: data,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-
-      return account;
-    } catch (error: any) {
-      throw new Error(`Failed to update account: ${error.message}`);
+      logger.warn({ userId, accountId: id, txCount, ip, ua }, 'Account deactivated (has transactions)');
+    } else {
+      await Account.findByIdAndDelete(id);
+      logger.info({ userId, accountId: id, ip, ua }, 'Account deleted');
     }
   }
 
-  /**
-   * Delete account (soft delete)
-   */
-  async deleteAccount(
-    userId: string,
-    accountId: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
-    try {
-      const account = await Account.findOne({ _id: accountId, userId });
-
-      if (!account) {
-        throw new Error('Account not found');
-      }
-
-      // Check if account has transactions
-      const transactionCount = await Transaction.countDocuments({
-        $or: [{ accountId }, { destinationAccountId: accountId }],
-      });
-
-      if (transactionCount > 0) {
-        // Soft delete - deactivate instead of delete
-        account.isActive = false;
-        await account.save();
-
-        await AuditLog.log({
-          userId: new mongoose.Types.ObjectId(userId),
-          action: AuditAction.ACCOUNT_DEACTIVATE,
-          resource: 'Account',
-          resourceId: account._id,
-          details: {
-            reason: 'Has transactions',
-            transactionCount,
-          },
-          ipAddress,
-          userAgent,
-          statusCode: 200,
-        });
-      } else {
-        // Hard delete if no transactions
-        await Account.findByIdAndDelete(accountId);
-
-        await AuditLog.log({
-          userId: new mongoose.Types.ObjectId(userId),
-          action: AuditAction.ACCOUNT_DELETE,
-          resource: 'Account',
-          resourceId: account._id,
-          details: {
-            type: account.type,
-            name: account.name,
-          },
-          ipAddress,
-          userAgent,
-          statusCode: 200,
-        });
-      }
-    } catch (error: any) {
-      throw new Error(`Failed to delete account: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get account balance
-   */
-  async getAccountBalance(userId: string, accountId: string): Promise<number> {
-    try {
-      const account = await Account.findOne({ _id: accountId, userId });
-
-      if (!account) {
-        throw new Error('Account not found');
-      }
-
-      return account.balance;
-    } catch (error: any) {
-      throw new Error(`Failed to get account balance: ${error.message}`);
-    }
-  }
-
-  /**
-   * Update account balance (internal method)
-   */
-  async updateBalance(accountId: string, amount: number): Promise<void> {
-    try {
-      const account = await Account.findById(accountId);
-
-      if (!account) {
-        throw new Error('Account not found');
-      }
-
-      account.balance += amount;
-      account.metadata.lastTransactionAt = new Date();
-
-      await account.save();
-
-      // 🔥 NEW: Update goals linked to this account
-      try {
-        const { Goal } = await import('../models/Goal');
-        const goals = await Goal.find({
-          userId: account.userId,
-          linkedAccountId: accountId,
-          status: 'active',
-        });
-
-        for (const goal of goals) {
-          await this.goalService.updateGoalProgress(goal._id.toString());
-        }
-      } catch (error: any) {
-        console.error('Failed to update related goals:', error.message);
-      }
-    } catch (error: any) {
-      throw new Error(`Failed to update account balance: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get total balance across all accounts
-   */
-  async getTotalBalance(userId: string): Promise<number> {
-    try {
-      const accounts = await Account.find({ userId, isActive: true });
-
-      const total = accounts.reduce((sum, account) => {
-        // Exclude loans from total (they're negative)
-        if (account.type === AccountType.LOANS) {
-          return sum;
-        }
-        return sum + account.balance;
-      }, 0);
-
-      return total;
-    } catch (error: any) {
-      throw new Error(`Failed to calculate total balance: ${error.message}`);
-    }
-  }
-
-  /**
-   * Get accounts summary
-   */
-  async getAccountsSummary(userId: string): Promise<{
+  async getSummary(userId: string): Promise<{
     total: number;
     byType: Record<AccountType, number>;
     liquidAssets: number;
     investments: number;
     loans: number;
   }> {
+    const accounts = await Account.find({ userId, isActive: true });
+
+    const byType = Object.values(AccountType).reduce((acc, type) => ({ ...acc, [type]: 0 }), {} as Record<AccountType, number>);
+    let total = 0, liquid = 0, invest = 0, loans = 0;
+
+    for (const a of accounts) {
+      byType[a.type] += a.balance;
+      if (a.type !== AccountType.LOANS) total += a.balance;
+      if ([AccountType.CASH, AccountType.BANK, AccountType.SAVINGS].includes(a.type)) liquid += a.balance;
+      if (a.type === AccountType.INVESTMENTS) invest += a.balance;
+      if (a.type === AccountType.LOANS) loans += Math.abs(a.balance);
+    }
+
+    return { total, byType, liquidAssets: liquid, investments: invest, loans };
+  }
+
+  async updateBalance(accountId: string, amount: number): Promise<void> {
+    const account = await Account.findById(accountId);
+    if (!account) throw new Error('Account not found');
+
+    account.balance += amount;
+    account.metadata.lastTransactionAt = new Date();
+    await account.save();
+
+    // Trigger goal updates
     try {
-      const accounts = await Account.find({ userId, isActive: true });
-
-      const byType: Record<AccountType, number> = {
-        [AccountType.CASH]: 0,
-        [AccountType.BANK]: 0,
-        [AccountType.SAVINGS]: 0,
-        [AccountType.INVESTMENTS]: 0,
-        [AccountType.LOANS]: 0,
-      };
-
-      let total = 0;
-      let liquidAssets = 0;
-      let investments = 0;
-      let loans = 0;
-
-      accounts.forEach((account) => {
-        byType[account.type] += account.balance;
-
-        if (account.type !== AccountType.LOANS) {
-          total += account.balance;
-        }
-
-        if (
-          account.type === AccountType.CASH ||
-          account.type === AccountType.BANK ||
-          account.type === AccountType.SAVINGS
-        ) {
-          liquidAssets += account.balance;
-        }
-
-        if (account.type === AccountType.INVESTMENTS) {
-          investments += account.balance;
-        }
-
-        if (account.type === AccountType.LOANS) {
-          loans += Math.abs(account.balance);
-        }
-      });
-
-      return {
-        total,
-        byType,
-        liquidAssets,
-        investments,
-        loans,
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to get accounts summary: ${error.message}`);
+      const { GoalService } = await import('./goal.service.js');
+      const goals = await (await import('../models/Goal.js')).Goal.find({ userId: account.userId, linkedAccountId: accountId, status: 'active' });
+      const goalSvc = new GoalService();
+      for (const g of goals) await goalSvc.updateProgress(g._id.toString());
+    } catch (err) {
+      logger.error({ accountId, err }, 'Failed to update goals');
     }
   }
-                                           }
+}
