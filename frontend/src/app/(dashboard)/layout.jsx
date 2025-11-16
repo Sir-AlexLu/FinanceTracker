@@ -5,24 +5,24 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import useAuthStore from '@/store/authStore'
 import { Toaster } from 'react-hot-toast'
-import { MenuIcon, XMarkIcon, SunIcon, MoonIcon } from 'lucide-react'
+import { MenuIcon, XMarkIcon, SunIcon, MoonIcon, Wallet } from 'lucide-react'   // ← import Wallet here
 import { Sidebar } from '@/components/organisms/Sidebar'
 import { MobileNav } from '@/components/organisms/MobileNav'
 
-export default function DashboardLayout({ children }) {
+export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter()
   const pathname = usePathname()
   const { isAuthenticated, isLoading, initialize, theme, setTheme } = useAuthStore()
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isReady, setIsReady] = useState(false)
 
-  // Initialize auth state
+  // Initialize auth
   useEffect(() => {
     initialize()
     setIsReady(true)
   }, [initialize])
 
-  // Redirect unauthenticated users
+  // Redirect if not authenticated
   useEffect(() => {
     if (isReady && !isLoading && !isAuthenticated) {
       router.replace('/login')
@@ -34,17 +34,17 @@ export default function DashboardLayout({ children }) {
     setSidebarOpen(false)
   }, [pathname])
 
-  // Apply theme to document
+  // Apply theme to <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
-  // Show loading spinner during auth check
+  // Loading while checking auth
   if (!isReady || isLoading) {
     return <AuthLoadingScreen />
   }
 
-  // Block rendering if not authenticated
+  // Block render if not logged in
   if (!isAuthenticated) {
     return null
   }
@@ -118,7 +118,7 @@ export default function DashboardLayout({ children }) {
             <motion.div
               key={pathname}
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y:req 0 }}
+              animate={{ opacity: 1, y: 0 }}   // ← typo fixed
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
@@ -134,7 +134,9 @@ export default function DashboardLayout({ children }) {
   )
 }
 
-// Reusable Loading Screen
+/* ------------------------------------------------------------------ */
+/* Loading screen (uses Wallet icon – now imported above)               */
+/* ------------------------------------------------------------------ */
 function AuthLoadingScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-slate-50 via-primary-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700">
@@ -165,7 +167,9 @@ function AuthLoadingScreen() {
   )
 }
 
-// Theme Toggle Button
+/* ------------------------------------------------------------------ */
+/* Theme toggle                                                       */
+/* ------------------------------------------------------------------ */
 function ThemeToggle() {
   const { theme, setTheme } = useAuthStore()
 
@@ -187,6 +191,3 @@ function ThemeToggle() {
     </button>
   )
 }
-
-// Import missing icon
-import { Wallet } from 'lucide-react'
