@@ -5,7 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { motion, AnimatePresence } from 'framer-motion'
 import useAuthStore from '@/store/authStore'
 import { Toaster } from 'react-hot-toast'
-import { MenuIcon, XMarkIcon, SunIcon, MoonIcon, Wallet } from 'lucide-react'   // ← import Wallet here
+import { MenuIcon, XMarkIcon, SunIcon, MoonIcon, Wallet } from 'lucide-react'
 import { Sidebar } from '@/components/organisms/Sidebar'
 import { MobileNav } from '@/components/organisms/MobileNav'
 
@@ -16,35 +16,29 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isReady, setIsReady] = useState(false)
 
-  // Initialize auth
   useEffect(() => {
     initialize()
     setIsReady(true)
   }, [initialize])
 
-  // Redirect if not authenticated
   useEffect(() => {
     if (isReady && !isLoading && !isAuthenticated) {
       router.replace('/login')
     }
   }, [isAuthenticated, isLoading, isReady, router])
 
-  // Close mobile sidebar on route change
   useEffect(() => {
     setSidebarOpen(false)
   }, [pathname])
 
-  // Apply theme to <html>
   useEffect(() => {
     document.documentElement.classList.toggle('dark', theme === 'dark')
   }, [theme])
 
-  // Loading while checking auth
   if (!isReady || isLoading) {
     return <AuthLoadingScreen />
   }
 
-  // Block render if not logged in
   if (!isAuthenticated) {
     return null
   }
@@ -59,12 +53,10 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <Toaster position="top-right" />
 
       <div className="flex">
-        {/* Desktop Sidebar */}
         <aside className="hidden lg:block w-72">
           <Sidebar />
         </aside>
 
-        {/* Mobile Backdrop */}
         <AnimatePresence>
           {sidebarOpen && (
             <motion.div
@@ -77,7 +69,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </AnimatePresence>
 
-        {/* Mobile Sidebar */}
         <AnimatePresence>
           {sidebarOpen && (
             <motion.aside
@@ -92,9 +83,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           )}
         </AnimatePresence>
 
-        {/* Main Content */}
         <div className="flex-1 flex flex-col min-h-screen">
-          {/* Header */}
           <header className="sticky top-0 z-30 glass-neumorph border-b border-border px-4 py-3">
             <div className="flex items-center justify-between">
               <button
@@ -113,12 +102,11 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </div>
           </header>
 
-          {/* Page Content */}
           <main className="flex-1 p-4 md:p-6 lg:p-8 overflow-y-auto">
             <motion.div
               key={pathname}
               initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}   // ← typo fixed
+              animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
@@ -126,7 +114,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
             </motion.div>
           </main>
 
-          {/* Mobile Bottom Nav */}
           <MobileNav />
         </div>
       </div>
@@ -134,9 +121,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Loading screen (uses Wallet icon – now imported above)               */
-/* ------------------------------------------------------------------ */
 function AuthLoadingScreen() {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center px-4 bg-gradient-to-br from-slate-50 via-primary-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700">
@@ -167,9 +151,6 @@ function AuthLoadingScreen() {
   )
 }
 
-/* ------------------------------------------------------------------ */
-/* Theme toggle                                                       */
-/* ------------------------------------------------------------------ */
 function ThemeToggle() {
   const { theme, setTheme } = useAuthStore()
 
