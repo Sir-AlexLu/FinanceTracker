@@ -1,195 +1,43 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { LiabilityService } from '../services/liability.service';
-import {
-  CreateLiabilityInput,
-  UpdateLiabilityInput,
-  MakeLiabilityPaymentInput,
-  GetLiabilitiesQuery,
-} from '../schemas/liability.schema';
-import { LiabilityQueryParams } from '../types/query.types';
-import { successResponse, errorResponse, paginatedResponse } from '../utils/responseFormatter';
+// src/controllers/liability.controller.ts
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import { LiabilityService } from '../services/liability.service.js';
+import { createLiabilitySchema, updateLiabilitySchema, makeLiabilityPaymentSchema } from '../schemas/liability.schema.js';
 
 export class LiabilityController {
-  private liabilityService: LiabilityService;
+  private svc = new LiabilityService();
 
-  constructor() {
-    this.liabilityService = new LiabilityService();
-  }
+  create = async (req: FastifyRequest<{ Body: typeof createLiabilitySchema['_output'] }>, reply: FastifyReply) => {
+    const liability = await this.svc.create(req.user.userId, req.body, req.ip, req.headers['user-agent'] || '');
+    reply.code(201).send({ data: liability, message: 'Created' });
+  };
 
-  /**
-   * Create a new liability
-   */
-  async createLiability(
-    request: FastifyRequest<{ Body: CreateLiabilityInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const data = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
+  payment = async (req: FastifyRequest<{ Params: { id: string }; Body: typeof makeLiabilityPaymentSchema['_output'] }>, reply: FastifyReply) => {
+    const result = await this.svc.makePayment(req.user.userId, req.params.id, req.body, req.ip, req.headers['user-agent'] || '');
+    reply.send({ data: result, message: 'Paid' });
+  };
 
-      const liability = await this.liabilityService.createLiability(
-        userId,
-        data,
-        ipAddress,
-        userAgent
-      );
+  getAll = async (req: FastifyRequest<{ Querystring: any }>, reply: FastifyReply) => {
+    const result = await this.svc.getAll(req.user.userId, req.query);
+    reply.send({ data: result.liabilities, meta: { page: result.page, total: result.total, totalPages: result.totalPages } });
+  };
 
-      reply.status(201).send(successResponse(liability, 'Liability created successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
+  getById = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const liability = await this.svc.getById(req.user.userId, req.params.id);
+    reply.send({ data: liability });
+  };
 
-  /**
-   * Make a payment towards liability
-   */
-  async makePayment(
-    request: FastifyRequest<{ Params: { id: string }; Body: MakeLiabilityPaymentInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const liabilityId = request.params.id;
-      const data = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
+  update = async (req: FastifyRequest<{ Params: { id: string }; Body: typeof updateLiabilitySchema['_output'] }>, reply: FastifyReply) => {
+    const liability = await this.svc.update(req.user.userId, req.params.id, req.body, req.ip, req.headers['user-agent'] || '');
+    reply.send({ data: liability, message: 'Updated' });
+  };
 
-      const result = await this.liabilityService.makePayment(
-        userId,
-        liabilityId,
-        data,
-        ipAddress,
-        userAgent
-      );
+  delete = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    await this.svc.delete(req.user.userId, req.params.id, req.ip, req.headers['user-agent'] || '');
+    reply.send({ message: 'Deleted' });
+  };
 
-      reply.status(200).send(
-        successResponse(
-          {
-            liability: result.liability,
-            transaction: result.transaction,
-          },
-          'Payment recorded successfully'
-        )
-      );
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Get liabilities with filters
-   */
-  async getLiabilities(
-    request: FastifyRequest<{ Querystring: LiabilityQueryParams }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const filters = {
-        status: request.query.status,
-        page: request.query.page ? parseInt(request.query.page) : 1,
-        limit: request.query.limit ? parseInt(request.query.limit) : 20,
-      };
-
-      const result = await this.liabilityService.getLiabilities(userId, filters);
-
-      reply.status(200).send(
-        paginatedResponse(result.liabilities, result.page, result.limit, result.total)
-      );
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Get liability by ID
-   */
-  async getLiabilityById(
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const liabilityId = request.params.id;
-
-      const liability = await this.liabilityService.getLiabilityById(userId, liabilityId);
-
-      reply.status(200).send(successResponse(liability));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(404).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Update liability
-   */
-  async updateLiability(
-    request: FastifyRequest<{ Params: { id: string }; Body: UpdateLiabilityInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const liabilityId = request.params.id;
-      const data = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      const liability = await this.liabilityService.updateLiability(
-        userId,
-        liabilityId,
-        data,
-        ipAddress,
-        userAgent
-      );
-
-      reply.status(200).send(successResponse(liability, 'Liability updated successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Delete liability
-   */
-  async deleteLiability(
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const liabilityId = request.params.id;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      await this.liabilityService.deleteLiability(userId, liabilityId, ipAddress, userAgent);
-
-      reply.status(200).send(successResponse(null, 'Liability deleted successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Get liability summary
-   */
-  async getLiabilitySummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    try {
-      const userId = request.user.userId;
-
-      const summary = await this.liabilityService.getLiabilitySummary(userId);
-
-      reply.status(200).send(successResponse(summary));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-  }
+  summary = async (req: FastifyRequest, reply: FastifyReply) => {
+    const summary = await this.svc.getSummary(req.user.userId);
+    reply.send({ data: summary });
+  };
+}
