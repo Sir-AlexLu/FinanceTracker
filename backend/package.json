@@ -1,0 +1,22 @@
+{
+  "name": "finance-tracker-backend",
+  "version": "1.0.0",
+  "description": "Finance Tracker API",
+  "main": "src/server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node src/server.js"
+  },
+  "keywords": ["finance", "tracker", "api"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@fastify/cors": "^8.5.0",
+    "@fastify/jwt": "^7.2.4",
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.3.1",
+    "fastify": "^4.25.2",
+    "mongoose": "^8.0.3"
+  }
+}
