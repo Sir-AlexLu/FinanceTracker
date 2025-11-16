@@ -1,13 +1,15 @@
 {
-  "name": "finance-tracker-v2",
-  "version": "2.0.0",
+  "name": "finance-tracker-v3",
+  "version": "3.0.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "analyze": "ANALYZE=true next build"
+    "analyze": "ANALYZE=true next build",
+    "clean": "rm -rf .next node_modules package-lock.json",
+    "fresh-install": "npm run clean && npm install"
   },
   "dependencies": {
     "next": "14.0.4",
@@ -23,7 +25,9 @@
     "recharts": "^2.10.3",
     "date-fns": "^3.0.6",
     "axios": "^1.6.5",
-    "@tanstack/react-virtual": "^3.0.2"
+    "@tanstack/react-virtual": "^3.0.2",
+    "@heroicons/react": "^2.0.18",
+    "react-hot-toast": "^2.4.1"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
