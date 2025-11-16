@@ -5,10 +5,21 @@ import { logger } from '../utils/logger.js';
 import { formatSettlementPeriod } from '../utils/dateHelpers.js';
 import type { TransactionType } from '../types/models.types.js';
 
+// Assuming mongoose is imported globally or in a common file, 
+// otherwise it would need: import mongoose from 'mongoose';
+// This is inferred from the code's use of `mongoose.startSession()`
+import mongoose from 'mongoose';
+
+// Assuming these types are defined elsewhere, e.g., in a types file
+// This is inferred from their use as parameters
+type CreateTransactionInput = any; 
+type UpdateTransactionInput = any;
+
 export class TransactionService {
   private accountService = new import('./account.service.js').AccountService();
   private budgetService = new import('./budget.service.js').BudgetService();
   private goalService = new import('./goal.service.js').GoalService();
+  private liabilityService = new import('./liability.service.js').LiabilityService();
 
   async create(userId: string, data: CreateTransactionInput, ip: string, ua: string): Promise<ITransaction> {
     const session = await mongoose.startSession();
@@ -40,6 +51,16 @@ export class TransactionService {
       // Async side effects
       this.updateBudgetAsync(userId, tx[0]);
       this.updateGoalsAsync(userId, tx[0]);
+
+      // --- ADDED CODE BLOCK ---
+      if (data.isLiabilityPayment && data.liabilityId) {
+        await this.liabilityService.makePayment(userId, data.liabilityId.toString(), {
+          amount: data.amount,
+          accountId: data.accountId,
+          notes: data.notes,
+        }, ip, ua).catch(() => {});
+      }
+      // --- END ADDED CODE BLOCK ---
 
       logger.info({ userId, txId: tx[0]._id, type: tx[0].type, amount: tx[0].amount, ip, ua }, 'Transaction created');
       return tx[0];
