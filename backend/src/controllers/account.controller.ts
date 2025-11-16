@@ -1,151 +1,39 @@
-import { FastifyRequest, FastifyReply } from 'fastify';
-import { AccountService } from '../services/account.service';
-import {
-  CreateAccountInput,
-  UpdateAccountInput,
-  GetAccountByIdInput,
-} from '../schemas/account.schema';
-import { AccountQueryParams } from '../types/query.types';
-import { successResponse, errorResponse } from '../utils/responseFormatter';
+// src/controllers/account.controller.ts
+import type { FastifyRequest, FastifyReply } from 'fastify';
+import { AccountService } from '../services/account.service.js';
+import { createAccountSchema, updateAccountSchema } from '../schemas/account.schema.js';
+import { logger } from '../utils/logger.js';
 
 export class AccountController {
-  private accountService: AccountService;
+  private service = new AccountService();
 
-  constructor() {
-    this.accountService = new AccountService();
-  }
+  create = async (req: FastifyRequest<{ Body: typeof createAccountSchema['_output'] }>, reply: FastifyReply) => {
+    const account = await this.service.create(req.user.userId, req.body, req.ip, req.headers['user-agent'] || '');
+    reply.code(201).send({ data: account, message: 'Account created' });
+  };
 
-  /**
-   * Create a new account
-   */
-  async createAccount(
-    request: FastifyRequest<{ Body: CreateAccountInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const data = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
+  getAll = async (req: FastifyRequest<{ Querystring: { includeInactive?: 'true' | 'false' } }>, reply: FastifyReply) => {
+    const accounts = await this.service.getAll(req.user.userId, req.query.includeInactive === 'true');
+    reply.send({ data: accounts });
+  };
 
-      const account = await this.accountService.createAccount(
-        userId,
-        data,
-        ipAddress,
-        userAgent
-      );
+  getById = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    const account = await this.service.getById(req.user.userId, req.params.id);
+    reply.send({ data: account });
+  };
 
-      reply.status(201).send(successResponse(account, 'Account created successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
+  update = async (req: FastifyRequest<{ Params: { id: string }; Body: typeof updateAccountSchema['_output'] }>, reply: FastifyReply) => {
+    const account = await this.service.update(req.user.userId, req.params.id, req.body, req.ip, req.headers['user-agent'] || '');
+    reply.send({ data: account, message: 'Account updated' });
+  };
 
-  /**
-   * Get all accounts
-   */
-  async getAccounts(
-    request: FastifyRequest<{ Querystring: AccountQueryParams }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const includeInactive = request.query.includeInactive === 'true';
+  delete = async (req: FastifyRequest<{ Params: { id: string } }>, reply: FastifyReply) => {
+    await this.service.delete(req.user.userId, req.params.id, req.ip, req.headers['user-agent'] || '');
+    reply.send({ message: 'Account deleted/deactivated' });
+  };
 
-      const accounts = await this.accountService.getAccounts(userId, includeInactive);
-
-      reply.status(200).send(successResponse(accounts));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Get account by ID
-   */
-  async getAccountById(
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const accountId = request.params.id;
-
-      const account = await this.accountService.getAccountById(userId, accountId);
-
-      reply.status(200).send(successResponse(account));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(404).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Update account
-   */
-  async updateAccount(
-    request: FastifyRequest<{ Params: { id: string }; Body: UpdateAccountInput }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const accountId = request.params.id;
-      const data = request.body;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      const account = await this.accountService.updateAccount(
-        userId,
-        accountId,
-        data,
-        ipAddress,
-        userAgent
-      );
-
-      reply.status(200).send(successResponse(account, 'Account updated successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Delete account
-   */
-  async deleteAccount(
-    request: FastifyRequest<{ Params: { id: string } }>,
-    reply: FastifyReply
-  ): Promise<void> {
-    try {
-      const userId = request.user.userId;
-      const accountId = request.params.id;
-      const ipAddress = request.ip;
-      const userAgent = request.headers['user-agent'] || 'unknown';
-
-      await this.accountService.deleteAccount(userId, accountId, ipAddress, userAgent);
-
-      reply.status(200).send(successResponse(null, 'Account deleted successfully'));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
-
-  /**
-   * Get accounts summary
-   */
-  async getAccountsSummary(request: FastifyRequest, reply: FastifyReply): Promise<void> {
-    try {
-      const userId = request.user.userId;
-
-      const summary = await this.accountService.getAccountsSummary(userId);
-
-      reply.status(200).send(successResponse(summary));
-    } catch (error: any) {
-      request.log.error(error);
-      reply.status(400).send(errorResponse(error.message));
-    }
-  }
+  summary = async (req: FastifyRequest, reply: FastifyReply) => {
+    const summary = await this.service.getSummary(req.user.userId);
+    reply.send({ data: summary });
+  };
 }
