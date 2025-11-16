@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { toast } from '@/components/Notifications';
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
@@ -42,28 +43,156 @@ export default api;
 
 // Auth API
 export const authAPI = {
-  register: (data) => api.post('/auth/register', data),
-  login: (data) => api.post('/auth/login', data),
-  getMe: () => api.get('/auth/me'),
+  register: async (data) => {
+    try {
+      const response = await api.post('/auth/register', data);
+      return response;
+    } catch (error) {
+      toast.error('Registration failed');
+      throw error;
+    }
+  },
+  login: async (data) => {
+    try {
+      const response = await api.post('/auth/login', data);
+      return response;
+    } catch (error) {
+      toast.error('Login failed');
+      throw error;
+    }
+  },
+  getMe: async () => {
+    try {
+      const response = await api.get('/auth/me');
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch user details');
+      throw error;
+    }
+  },
 };
 
 // Accounts API
 export const accountsAPI = {
-  getAll: () => api.get('/accounts'),
-  getOne: (id) => api.get(`/accounts/${id}`),
-  create: (data) => api.post('/accounts', data),
-  update: (id, data) => api.put(`/accounts/${id}`, data),
-  delete: (id) => api.delete(`/accounts/${id}`),
-  getBalance: (id) => api.get(`/accounts/${id}/balance`),
+  getAll: async () => {
+    try {
+      const response = await api.get('/accounts');
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch accounts');
+      throw error;
+    }
+  },
+  getOne: async (id) => {
+    try {
+      const response = await api.get(`/accounts/${id}`);
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch account details');
+      throw error;
+    }
+  },
+  create: async (data) => {
+    try {
+      const response = await api.post('/accounts', data);
+      return response;
+    } catch (error) {
+      toast.error('Failed to create account');
+      throw error;
+    }
+  },
+  update: async (id, data) => {
+    try {
+      const response = await api.put(`/accounts/${id}`, data);
+      return response;
+    } catch (error) {
+      toast.error('Failed to update account');
+      throw error;
+    }
+  },
+  delete: async (id) => {
+    try {
+      const response = await api.delete(`/accounts/${id}`);
+      return response;
+    } catch (error) {
+      toast.error('Failed to delete account');
+      throw error;
+    }
+  },
+  getBalance: async (id) => {
+    try {
+      const response = await api.get(`/accounts/${id}/balance`);
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch account balance');
+      throw error;
+    }
+  },
 };
 
 // Transactions API
 export const transactionsAPI = {
-  getAll: (params) => api.get('/transactions', { params }),
-  getOne: (id) => api.get(`/transactions/${id}`),
-  create: (data) => api.post('/transactions', data),
-  transfer: (data) => api.post('/transactions/transfer', data),
-  update: (id, data) => api.put(`/transactions/${id}`, data),
-  delete: (id) => api.delete(`/transactions/${id}`),
-  getAnalytics: (params) => api.get('/transactions/analytics', { params }),
+  getAll: async (params) => {
+    try {
+      const response = await api.get('/transactions', { params });
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch transactions');
+      throw error;
+    }
+  },
+  getOne: async (id) => {
+    try {
+      const response = await api.get(`/transactions/${id}`);
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch transaction details');
+      throw error;
+    }
+  },
+  create: async (data) => {
+    try {
+      const response = await api.post('/transactions', data);
+      return response;
+    } catch (error) {
+      toast.error('Failed to create transaction');
+      throw error;
+    }
+  },
+  transfer: async (data) => {
+    try {
+      const response = await api.post('/transactions/transfer', data);
+      return response;
+    } catch (error) {
+      toast.error('Transfer failed');
+      throw error;
+    }
+  },
+  update: async (id, data) => {
+    try {
+      const response = await api.put(`/transactions/${id}`, data);
+      return response;
+    } catch (error) {
+      toast.error('Failed to update transaction');
+      throw error;
+    }
+  },
+  delete: async (id) => {
+    try {
+      const response = await api.delete(`/transactions/${id}`);
+      return response;
+    } catch (error) {
+      toast.error('Failed to delete transaction');
+      throw error;
+    }
+  },
+  getAnalytics: async (params) => {
+    try {
+      const response = await api.get('/transactions/analytics', { params });
+      return response;
+    } catch (error) {
+      toast.error('Failed to fetch analytics');
+      throw error;
+    }
+  },
 };
