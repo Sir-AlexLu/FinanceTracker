@@ -56,13 +56,15 @@ const build = async () => {
         '@fastify/*',
         'bcrypt',
         'dotenv',
-        'zod'
+        'zod',
+        'jsonwebtoken'
       ],
       minify: process.env.NODE_ENV === 'production',
       sourcemap: process.env.NODE_ENV !== 'production',
       treeShaking: true,
       banner: {
         js: `import { createRequire } from 'module';
+import path from 'path';
 const require = createRequire(import.meta.url);
 const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);`
