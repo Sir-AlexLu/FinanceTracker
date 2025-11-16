@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { authAPI } from '@/lib/api';
+import { toast } from '@/components/Notifications';
 
 const useAuthStore = create(
   persist(
@@ -24,6 +25,7 @@ const useAuthStore = create(
           localStorage.removeItem('user');
         }
         set({ user: null, token: null, isAuthenticated: false });
+        toast.success('Logged out successfully');
       },
 
       fetchUser: async () => {
@@ -31,18 +33,18 @@ const useAuthStore = create(
         try {
           const response = await authAPI.getMe();
           if (response.data.success) {
-            set({ 
-              user: response.data.data.user, 
+            set({
+              user: response.data.data.user,
               isAuthenticated: true,
-              isLoading: false 
+              isLoading: false,
             });
           }
         } catch (error) {
-          set({ 
-            user: null, 
-            token: null, 
+          set({
+            user: null,
+            token: null,
             isAuthenticated: false,
-            isLoading: false 
+            isLoading: false,
           });
         }
       },
