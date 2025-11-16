@@ -4,7 +4,6 @@ import { Inter, Space_Grotesk } from 'next/font/google'
 import { Toaster } from 'react-hot-toast'
 import './globals.css'
 
-// Fonts
 const inter = Inter({
   subsets: ['latin'],
   variable: '--font-sans',
@@ -17,7 +16,6 @@ const spaceGrotesk = Space_Grotesk({
   display: 'swap',
 })
 
-// Metadata (still works in Client Component in Next.js 14+)
 export const metadata = {
   title: 'Finance Tracker',
   description: 'Master your money with style',
@@ -25,7 +23,6 @@ export const metadata = {
   themeColor: '#3b82f6',
 }
 
-// Client Wrapper (now at top, after 'use client')
 function ClientWrapper({ children }: { children: React.ReactNode }) {
   return (
     <>
@@ -43,7 +40,6 @@ function ClientWrapper({ children }: { children: React.ReactNode }) {
   )
 }
 
-// Root Layout
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
