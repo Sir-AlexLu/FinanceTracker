@@ -1,4 +1,3 @@
-// src/app/(dashboard)/dashboard/analytics/page.jsx
 'use client'
 
 import { useState, useEffect, useMemo } from 'react'
@@ -9,9 +8,9 @@ import { formatCurrency } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/atoms/Card'
 import { Button } from '@/components/atoms/Button'
 import { 
-  ChartBarIcon, CalendarIcon, TrendingUpIcon, TrendingDownIcon,
-  ArrowPathIcon
-} from '@heroicons/react/24/outline'
+  BarChart3Icon, CalendarIcon, TrendingUpIcon, TrendingDownIcon,
+  ArrowPathIcon, DollarSignIcon
+} from 'lucide-react'
 import { 
   ResponsiveContainer, LineChart, Line, BarChart, Bar, PieChart, Pie, Cell,
   XAxis, YAxis, CartesianGrid, Tooltip, Legend
@@ -59,47 +58,59 @@ export default function AnalyticsPage() {
           startDate.setFullYear(now.getFullYear() - 1)
           break
       }
-      params.startDate = startDate.toISOString()
+      params.startDate = startDate.toISOString().split('T')[0]
     }
 
-    const [analyticsRes, transactionsRes] = await Promise.allSettled([
-      transactionsAPI.getAnalytics(params),
-      transactionsAPI.getAll(params),
-    ])
+    try {
+      const [analyticsRes, transactionsRes] = await Promise.allSettled([
+        transactionsAPI.getAnalytics(params),
+        transactionsAPI.getAll({ ...params, limit: 100 }),
+      ])
 
-    if (analyticsRes.status === 'fulfilled' && analyticsRes.value.success) {
-      setAnalytics(analyticsRes.value.data)
-    } else {
-      toast.error('Failed to load analytics')
+      if (analyticsRes.status === 'fulfilled' && analyticsRes.value.success) {
+        setAnalytics(analyticsRes.value.data)
+      } else {
+        toast.error('Failed to load analytics')
+        setAnalytics(null)
+      }
+
+      if (transactionsRes.status === 'fulfilled' && transactionsRes.value.success) {
+        setTransactions(transactionsRes.value.data.transactions || [])
+      } else {
+        setTransactions([])
+      }
+    } catch (error) {
+      console.error('Analytics load error:', error)
+      toast.error('Failed to load data')
+    } finally {
+      setIsLoading(false)
     }
-
-    if (transactionsRes.status === 'fulfilled' && transactionsRes.value.success) {
-      setTransactions(transactionsRes.value.data.transactions || [])
-    }
-
-    setIsLoading(false)
   }
 
   // Prepare chart data
   const categoryData = useMemo(() => {
     if (!analytics?.categoryBreakdown) return []
-    return Object.entries(analytics.categoryBreakdown).map(([name, value]) => ({
-      name,
-      value: parseFloat(value),
-    }))
+    return Object.entries(analytics.categoryBreakdown)
+      .map(([name, value]) => ({
+        name,
+        value: parseFloat(value),
+      }))
+      .sort((a, b) => b.value - a.value)
   }, [analytics])
 
   const trendData = useMemo(() => {
     const monthlyData = {}
     transactions.forEach(t => {
-      const month = new Date(t.date).toLocaleDateString('en-US', { month: 'short', year: 'numeric' })
-      if (!monthlyData[month]) {
-        monthlyData[month] = { month, income: 0, expense: 0 }
+      const date = new Date(t.date)
+      const monthKey = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}`
+      if (!monthlyData[monthKey]) {
+        monthlyData[monthKey] = { month: date.toLocaleDateString('en-US', { month: 'short', year: 'numeric' }), income: 0, expense: 0 }
       }
+      const amount = parseFloat(t.amount) || 0
       if (t.type === 'income') {
-        monthlyData[month].income += parseFloat(t.amount)
+        monthlyData[monthKey].income += amount
       } else if (t.type === 'expense') {
-        monthlyData[month].expense += parseFloat(t.amount)
+        monthlyData[monthKey].expense += amount
       }
     })
     return Object.values(monthlyData).slice(-6)
@@ -112,9 +123,13 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
         <h1 className="text-3xl font-display font-bold">Analytics</h1>
-        <div className="flex gap-2">
+        <div className="flex flex-wrap gap-2">
           {PERIODS.map((p) => (
             <Button
               key={p.value}
@@ -126,34 +141,39 @@ export default function AnalyticsPage() {
             </Button>
           ))}
         </div>
-      </div>
+      </motion.div>
 
       {/* Summary Cards */}
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.1 }}
         className="grid grid-cols-1 md:grid-cols-3 gap-4"
       >
         <SummaryCard
           title="Total Income"
           value={formatCurrency(analytics?.totalIncome || 0)}
           icon={TrendingUpIcon}
-          iconClass="text-green-600 bg-green-100"
+          iconClass="text-green-600 bg-green-100 dark:bg-green-900/20"
           trend="+12.5%"
         />
         <SummaryCard
           title="Total Expenses"
           value={formatCurrency(analytics?.totalExpense || 0)}
           icon={TrendingDownIcon}
-          iconClass="text-red-600 bg-red-100"
+          iconClass="text-red-600 bg-red-100 dark:bg-red-900/20"
           trend="-3.2%"
         />
         <SummaryCard
           title="Net Savings"
           value={formatCurrency(analytics?.netSavings || 0)}
           icon={ArrowPathIcon}
-          iconClass={analytics?.netSavings >= 0 ? 'text-green-600 bg-green-100' : 'text-red-600 bg-red-100'}
-          trend={analytics?.netSavings >= 0 ? '+8.7%' : '-2.1%'}
+          iconClass={
+            (analytics?.netSavings || 0) >= 0 
+              ? 'text-green-600 bg-green-100 dark:bg-green-900/20' 
+              : 'text-red-600 bg-red-100 dark:bg-red-900/20'
+          }
+          trend={(analytics?.netSavings || 0) >= 0 ? '+8.7%' : '-2.1%'}
         />
       </motion.div>
 
@@ -175,13 +195,18 @@ export default function AnalyticsPage() {
                     labelLine={false}
                     label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
                     outerRadius={100}
+                    innerRadius={60}
+                    paddingAngle={2}
                     dataKey="value"
                   >
                     {categoryData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                  <Tooltip 
+                    formatter={(value) => formatCurrency(value)} 
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
                 </PieChart>
               </ResponsiveContainer>
             ) : (
@@ -198,14 +223,31 @@ export default function AnalyticsPage() {
           <CardContent>
             {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="month" />
-                  <YAxis />
-                  <Tooltip formatter={(value) => formatCurrency(value)} />
+                <LineChart data={trendData} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
+                  <XAxis dataKey="month" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip 
+                    formatter={(value) => formatCurrency(value)}
+                    contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)' }}
+                  />
                   <Legend />
-                  <Line type="monotone" dataKey="income" stroke="#10b981" strokeWidth={2} />
-                  <Line type="monotone" dataKey="expense" stroke="#ef4444" strokeWidth={2} />
+                  <Line 
+                    type="monotone" 
+                    dataKey="income" 
+                    stroke="#10b981" 
+                    strokeWidth={3} 
+                    dot={{ fill: '#10b981', r: 5 }}
+                    activeDot={{ r: 7 }}
+                  />
+                  <Line 
+                    type="monotone" 
+                    dataKey="expense" 
+                    stroke="#ef4444" 
+                    strokeWidth={3} 
+                    dot={{ fill: '#ef4444', r: 5 }}
+                    activeDot={{ r: 7 }}
+                  />
                 </LineChart>
               </ResponsiveContainer>
             ) : (
@@ -216,66 +258,74 @@ export default function AnalyticsPage() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ delay: 0.2 }}
+        className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4"
+      >
         <StatCard
           title="Total Transactions"
           value={analytics?.transactionCount || 0}
-          icon={ChartBarIcon}
-          iconClass="text-blue-600 bg-blue-100"
+          icon={BarChart3Icon}
+          iconClass="text-blue-600 bg-blue-100 dark:bg-blue-900/20"
         />
         <StatCard
           title="Avg Income"
           value={formatCurrency(analytics?.avgIncome || 0)}
-          icon={CurrencyDollarIcon}
-          iconClass="text-green-600 bg-green-100"
+          icon={DollarSignIcon}
+          iconClass="text-green-600 bg-green-100 dark:bg-green-900/20"
         />
         <StatCard
           title="Avg Expense"
           value={formatCurrency(analytics?.avgExpense || 0)}
-          icon={CurrencyDollarIcon}
-          iconClass="text-red-600 bg-red-100"
+          icon={DollarSignIcon}
+          iconClass="text-red-600 bg-red-100 dark:bg-red-900/20"
         />
         <StatCard
           title="Savings Rate"
-          value={`${analytics?.savingsRate || 0}%`}
+          value={`${(analytics?.savingsRate || 0).toFixed(1)}%`}
           icon={ArrowPathIcon}
-          iconClass="text-purple-600 bg-purple-100"
+          iconClass="text-purple-600 bg-purple-100 dark:bg-purple-900/20"
         />
-      </div>
+      </motion.div>
     </div>
   )
 }
 
+/* Sub-components */
 function SummaryCard({ title, value, icon: Icon, iconClass, trend }) {
   return (
-    <Card>
-      <CardContent className="pt-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">{title}</p>
-            <p className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
-            {trend && (
-              <span className={`text-xs font-medium ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
-                {trend}
-              </span>
-            )}
+    <motion.div whileHover={{ scale: 1.02 }} className="transition-transform">
+      <Card className="hover:shadow-md transition-shadow">
+        <CardContent className="pt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-slate-600 dark:text-slate-400 mb-1">{title}</p>
+              <p className="text-2xl font-bold text-slate-900 dark:text-white mb-1">{value}</p>
+              {trend && (
+                <span className={`text-xs font-medium ${trend.startsWith('+') ? 'text-green-600' : 'text-red-600'}`}>
+                  {trend}
+                </span>
+              )}
+            </div>
+            <div className={`p-3 rounded-2xl ${iconClass}`}>
+              <Icon className="h-6 w-6 text-current" />
+            </div>
           </div>
-          <div className={`p-3 rounded-2xl ${iconClass}`}>
-            <Icon className="h-6 w-6" />
-          </div>
-        </div>
-      </CardContent>
-    </Card>
+        </CardContent>
+      </Card>
+    </motion.div>
   )
 }
 
 function StatCard({ title, value, icon: Icon, iconClass }) {
   return (
-    <Card>
+    <Card className="hover:shadow-sm transition-shadow">
       <CardContent className="pt-6">
         <div className="flex items-center gap-3 mb-2">
           <div className={`p-2 rounded-lg ${iconClass}`}>
-            <Icon className="h-5 w-5" />
+            <Icon className="h-5 w-5 text-current" />
           </div>
           <p className="text-sm text-slate-600 dark:text-slate-400">{title}</p>
         </div>
@@ -287,10 +337,12 @@ function StatCard({ title, value, icon: Icon, iconClass }) {
 
 function EmptyState({ title, description }) {
   return (
-    <div className="h-[300px] flex flex-col items-center justify-center text-slate-500">
-      <ChartBarIcon className="h-12 w-12 mb-4" />
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <p className="text-sm">{description}</p>
+    <div className="h-[300px] flex flex-col items-center justify-center text-center px-4">
+      <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mb-4">
+        <BarChart3Icon className="h-8 w-8 text-slate-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">{title}</h3>
+      <p className="text-sm text-slate-500 dark:text-slate-400 max-w-xs">{description}</p>
     </div>
   )
 }
@@ -298,7 +350,17 @@ function EmptyState({ title, description }) {
 function AnalyticsSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse"></div>
+        <div className="flex gap-2">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="h-9 w-20 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
+          ))}
+        </div>
+      </div>
+
+      {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {[1, 2, 3].map((i) => (
           <Card key={i}>
@@ -306,16 +368,39 @@ function AnalyticsSkeleton() {
               <div className="animate-pulse space-y-3">
                 <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-24"></div>
                 <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-32"></div>
+                <div className="h-3 bg-slate-200 dark:bg-slate-700 rounded w-16"></div>
               </div>
             </CardContent>
           </Card>
         ))}
       </div>
+
+      {/* Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {[1, 2].map((i) => (
           <Card key={i}>
+            <CardHeader>
+              <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-40 animate-pulse"></div>
+            </CardHeader>
+            <CardContent>
+              <div className="h-[300px] bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse"></div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Stats */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {[1, 2, 3, 4].map((i) => (
+          <Card key={i}>
             <CardContent className="pt-6">
-              <div className="h-[300px] bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+              <div className="animate-pulse space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="h-9 w-9 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+                  <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-24"></div>
+                </div>
+                <div className="h-7 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+              </div>
             </CardContent>
           </Card>
         ))}
