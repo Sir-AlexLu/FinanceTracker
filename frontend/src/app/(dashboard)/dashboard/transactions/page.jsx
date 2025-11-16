@@ -1,21 +1,20 @@
-// src/app/(dashboard)/dashboard/transactions/page.jsx
 'use client'
 
-import { useState, useEffect, useMemo } from 'react'
+import { useState, useEffect, useMemo, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { transactionsAPI, accountsAPI } from '@/lib/api-safe'
 import { toast } from '@/hooks/useToast'
-import { formatCurrency, formatDate, debounce } from '@/lib/utils'
+import { formatCurrency, formatDate } from '@/lib/utils'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/atoms/Card'
 import { Button } from '@/components/atoms/Button'
 import { Input } from '@/components/atoms/Input'
 import { 
-  PlusIcon, FunnelIcon, MagnifyingGlassIcon,
+  PlusIcon, FilterIcon, SearchIcon,
   ArrowTrendingUpIcon, ArrowTrendingDownIcon, ArrowPathIcon,
-  CalendarIcon, CurrencyDollarIcon
-} from '@heroicons/react/24/outline'
-import { useVirtual } from '@tanstack/react-virtual'
+  CalendarIcon, DollarSignIcon, Trash2Icon
+} from 'lucide-react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 
 const TRANSACTION_TYPES = [
   { value: 'all', label: 'All', icon: null },
@@ -27,6 +26,7 @@ const TRANSACTION_TYPES = [
 const CATEGORIES = {
   income: ['Salary', 'Freelance', 'Investment', 'Gift', 'Other Income'],
   expense: ['Food', 'Transport', 'Shopping', 'Bills', 'Entertainment', 'Health', 'Education', 'Other'],
+  transfer: ['Transfer'],
 }
 
 export default function TransactionsPage() {
@@ -70,7 +70,7 @@ export default function TransactionsPage() {
     return transactions.filter(t => {
       const matchesType = filterType === 'all' || t.type === filterType
       const matchesSearch = debouncedSearch === '' || 
-        t.category.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
+        t.category?.toLowerCase().includes(debouncedSearch.toLowerCase()) ||
         t.description?.toLowerCase().includes(debouncedSearch.toLowerCase())
       return matchesType && matchesSearch
     })
@@ -78,7 +78,7 @@ export default function TransactionsPage() {
 
   // Virtualization
   const parentRef = useRef(null)
-  const virtualizer = useVirtual({
+  const rowVirtualizer = useVirtualizer({
     count: filteredTransactions.length,
     getScrollElement: () => parentRef.current,
     estimateSize: () => 80,
@@ -92,42 +92,58 @@ export default function TransactionsPage() {
   const loadData = async () => {
     setIsLoading(true)
     
-    const [txRes, accountsRes] = await Promise.allSettled([
-      transactionsAPI.getAll(),
-      accountsAPI.getAll(),
-    ])
+    try {
+      const [txRes, accountsRes] = await Promise.allSettled([
+        transactionsAPI.getAll(),
+        accountsAPI.getAll(),
+      ])
 
-    if (txRes.status === 'fulfilled' && txRes.value.success) {
-      setTransactions(txRes.value.data.transactions || [])
-    }
-
-    if (accountsRes.status === 'fulfilled' && accountsRes.value.success) {
-      setAccounts(accountsRes.value.data.accounts || [])
-      if (accountsRes.value.data.accounts.length > 0) {
-        setValue('accountId', accountsRes.value.data.accounts[0]._id || accountsRes.value.data.accounts[0].id)
+      if (txRes.status === 'fulfilled' && txRes.value.success) {
+        setTransactions(txRes.value.data.transactions || [])
+      } else {
+        toast.error('Failed to load transactions')
       }
-    }
 
-    setIsLoading(false)
+      if (accountsRes.status === 'fulfilled' && accountsRes.value.success) {
+        const accs = accountsRes.value.data.accounts || []
+        setAccounts(accs)
+        if (accs.length > 0) {
+          setValue('accountId', accs[0]._id || accs[0].id)
+        }
+      } else {
+        toast.error('Failed to load accounts')
+      }
+    } catch (error) {
+      console.error('Load error:', error)
+      toast.error('Failed to load data')
+    } finally {
+      setIsLoading(false)
+    }
   }
 
   const onSubmit = async (data) => {
     setIsLoading(true)
-    const response = await transactionsAPI.create(data)
-    
-    if (response.success) {
-      toast.success('Transaction created')
-      await loadData()
-      resetForm()
-    } else {
-      toast.error(response.error)
+    try {
+      const response = await transactionsAPI.create(data)
+      
+      if (response.success) {
+        toast.success('Transaction created')
+        await loadData()
+        resetForm()
+      } else {
+        toast.error(response.error || 'Failed to create transaction')
+      }
+    } catch (error) {
+      toast.error('Network error')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   const resetForm = () => {
+    const defaultAccountId = accounts[0]?._id || accounts[0]?.id || ''
     reset({
-      accountId: accounts[0]?._id || accounts[0]?.id || '',
+      accountId: defaultAccountId,
       type: 'expense',
       amount: '',
       category: '',
@@ -138,18 +154,23 @@ export default function TransactionsPage() {
   }
 
   const handleDelete = async (id) => {
-    if (!confirm('Delete this transaction?')) return
+    if (!window.confirm('Delete this transaction?')) return
     
     setIsLoading(true)
-    const response = await transactionsAPI.delete(id)
-    
-    if (response.success) {
-      toast.success('Transaction deleted')
-      await loadData()
-    } else {
-      toast.error(response.error)
+    try {
+      const response = await transactionsAPI.delete(id)
+      
+      if (response.success) {
+        toast.success('Transaction deleted')
+        await loadData()
+      } else {
+        toast.error(response.error || 'Failed to delete')
+      }
+    } catch (error) {
+      toast.error('Network error')
+    } finally {
+      setIsLoading(false)
     }
-    setIsLoading(false)
   }
 
   if (isLoading && transactions.length === 0) {
@@ -159,20 +180,24 @@ export default function TransactionsPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <motion.div
+        initial={{ opacity: 0, y: -20 }}
+        animate={{ opacity: 1, y: 0 }}
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4"
+      >
         <h1 className="text-3xl font-display font-bold">Transactions</h1>
         <Button onClick={() => setShowForm(!showForm)}>
           <PlusIcon className="h-5 w-5 mr-2" />
           {showForm ? 'Cancel' : 'New Transaction'}
         </Button>
-      </div>
+      </motion.div>
 
       {/* Filters */}
       <Card>
         <CardContent className="pt-6">
           <div className="flex flex-col lg:flex-row gap-4">
             {/* Type Filter */}
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               {TRANSACTION_TYPES.map((type) => {
                 const Icon = type.icon
                 return (
@@ -190,10 +215,10 @@ export default function TransactionsPage() {
             </div>
 
             {/* Search */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <Input
-                icon={MagnifyingGlassIcon}
-                placeholder="Search transactions..."
+                icon={SearchIcon}
+                placeholder="Search by category or description..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
               />
@@ -209,15 +234,17 @@ export default function TransactionsPage() {
             initial={{ opacity: 0, height: 0 }}
             animate={{ opacity: 1, height: 'auto' }}
             exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden"
           >
             <Card>
               <CardContent className="pt-6">
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Account */}
                     <div>
                       <label className="block text-sm font-medium mb-2">Account</label>
                       <select
-                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3"
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         {...register('accountId', { required: 'Account is required' })}
                         disabled={accounts.length === 0 || isLoading}
                       >
@@ -226,19 +253,26 @@ export default function TransactionsPage() {
                         ) : (
                           accounts.map((acc) => (
                             <option key={acc._id || acc.id} value={acc._id || acc.id}>
-                              {acc.name} ({formatCurrency(acc.balance)})
+                              {acc.name} • {formatCurrency(acc.balance)} {acc.currency}
                             </option>
                           ))
                         )}
                       </select>
+                      {errors.accountId && (
+                        <p className="text-red-500 text-xs mt-1">{errors.accountId.message}</p>
+                      )}
                     </div>
 
+                    {/* Type */}
                     <div>
                       <label className="block text-sm font-medium mb-2">Type</label>
                       <select
-                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3"
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         {...register('type', { required: 'Type is required' })}
-                        onChange={(e) => setValue('category', '')}
+                        onChange={(e) => {
+                          setValue('type', e.target.value)
+                          setValue('category', '')
+                        }}
                       >
                         <option value="expense">Expense</option>
                         <option value="income">Income</option>
@@ -246,45 +280,57 @@ export default function TransactionsPage() {
                       </select>
                     </div>
 
+                    {/* Amount */}
                     <Input
                       label="Amount"
                       type="number"
                       step="0.01"
-                      icon={CurrencyDollarIcon}
+                      icon={DollarSignIcon}
                       error={errors.amount?.message}
                       {...register('amount', { 
                         required: 'Amount is required',
-                        min: { value: 0.01, message: 'Amount must be positive' }
+                        min: { value: 0.01, message: 'Amount must be positive' },
+                        valueAsNumber: true
                       })}
                       placeholder="0.00"
+                      disabled={isLoading}
                     />
 
+                    {/* Category */}
                     <div>
                       <label className="block text-sm font-medium mb-2">Category</label>
                       <select
-                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3"
+                        className="w-full rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 px-4 py-3 text-sm focus:ring-2 focus:ring-primary-500 focus:border-transparent"
                         {...register('category', { required: 'Category is required' })}
+                        disabled={isLoading}
                       >
                         <option value="">Select Category</option>
-                        {CATEGORIES[transactionType]?.map((cat) => (
+                        {(CATEGORIES[transactionType] || []).map((cat) => (
                           <option key={cat} value={cat}>{cat}</option>
                         ))}
                       </select>
+                      {errors.category && (
+                        <p className="text-red-500 text-xs mt-1">{errors.category.message}</p>
+                      )}
                     </div>
 
+                    {/* Date */}
                     <Input
                       label="Date"
                       type="date"
                       icon={CalendarIcon}
                       error={errors.date?.message}
                       {...register('date', { required: 'Date is required' })}
+                      disabled={isLoading}
                     />
 
+                    {/* Description */}
                     <Input
-                      label="Description"
+                      label="Description (Optional)"
                       error={errors.description?.message}
                       {...register('description')}
-                      placeholder="Optional description..."
+                      placeholder="Add a note..."
+                      disabled={isLoading}
                     />
                   </div>
 
@@ -292,7 +338,7 @@ export default function TransactionsPage() {
                     <Button type="submit" isLoading={isLoading}>
                       Add Transaction
                     </Button>
-                    <Button type="button" variant="ghost" onClick={resetForm}>
+                    <Button type="button" variant="ghost" onClick={resetForm} disabled={isLoading}>
                       Cancel
                     </Button>
                   </div>
@@ -317,30 +363,40 @@ export default function TransactionsPage() {
               description="Try adjusting your filters or add a new transaction"
             />
           ) : (
-            <div ref={parentRef} className="h-[600px] overflow-y-auto scrollbar-hide">
+            <div ref={parentRef} className="h-[600px] overflow-y-auto scrollbar-hide border rounded-lg">
               <div
                 style={{
-                  height: `${virtualizer.getTotalSize()}px`,
+                  height: `${rowVirtualizer.getTotalSize()}px`,
                   width: '100%',
                   position: 'relative',
                 }}
               >
-                {virtualizer.getVirtualItems().map((virtualItem) => (
-                  <TransactionRow
-                    key={transactions[virtualItem.index]._id || transactions[virtualItem.index].id}
-                    transaction={transactions[virtualItem.index]}
-                    accounts={accounts}
-                    onDelete={handleDelete}
-                    style={{
-                      position: 'absolute',
-                      top: 0,
-                      left: 0,
-                      width: '100%',
-                      height: `${virtualItem.size}px`,
-                      transform: `translateY(${virtualItem.start}px)`,
-                    }}
-                  />
-                ))}
+                {rowVirtualizer.getVirtualItems().map((virtualItem) => {
+                  const transaction = filteredTransactions[virtualItem.index]
+                  return (
+                    <motion.div
+                      key={transaction._id || transaction.id}
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      exit={{ opacity: 0 }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualItem.size}px`,
+                        transform: `translateY(${virtualItem.start}px)`,
+                      }}
+                      className="px-1"
+                    >
+                      <TransactionRow
+                        transaction={transaction}
+                        accounts={accounts}
+                        onDelete={handleDelete}
+                      />
+                    </motion.div>
+                  )
+                })}
               </div>
             </div>
           )}
@@ -350,7 +406,8 @@ export default function TransactionsPage() {
   )
 }
 
-function TransactionRow({ transaction, accounts, onDelete, style }) {
+/* Sub-components */
+function TransactionRow({ transaction, accounts, onDelete }) {
   const account = accounts.find(a => (a._id || a.id) === transaction.accountId)
   const typeStyles = {
     income: 'text-green-600 bg-green-100 dark:bg-green-900/20',
@@ -362,21 +419,21 @@ function TransactionRow({ transaction, accounts, onDelete, style }) {
     expense: ArrowTrendingDownIcon,
     transfer: ArrowPathIcon,
   }
-  const Icon = icons[transaction.type]
+  const Icon = icons[transaction.type] || ArrowPathIcon
 
   return (
-    <div style={style} className="flex items-center justify-between py-3 border-b border-border last:border-0 px-2 hover:bg-accent/50 rounded-lg transition-colors">
-      <div className="flex items-center gap-3 flex-1">
+    <div className="flex items-center justify-between py-3 border-b border-border last:border-0 px-2 hover:bg-accent/50 rounded-lg transition-colors">
+      <div className="flex items-center gap-3 flex-1 min-w-0">
         <div className={`p-2 rounded-lg ${typeStyles[transaction.type]}`}>
-          <Icon className="h-4 w-4" />
+          <Icon className="h-4 w-4 text-current" />
         </div>
         <div className="flex-1 min-w-0">
-          <p className="font-medium text-slate-900 dark:text-white truncate">{transaction.category}</p>
+          <p className="font-medium text-slate-900 dark:text-white truncate">{transaction.category || 'Uncategorized'}</p>
           <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-            {account?.name} • {formatDate(transaction.date)}
+            {account?.name || 'Unknown'} • {formatDate(transaction.date)}
           </p>
           {transaction.description && (
-            <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+            <p className="text-xs text-slate-500 dark:text-slate-400 truncate mt-1">
               {transaction.description}
             </p>
           )}
@@ -385,14 +442,15 @@ function TransactionRow({ transaction, accounts, onDelete, style }) {
       <div className="flex items-center gap-3">
         <p className={`font-bold ${transaction.type === 'income' ? 'text-green-600' : 'text-red-600'}`}>
           {transaction.type === 'income' ? '+' : '-'}
-          {formatCurrency(transaction.amount)}
+          {formatCurrency(transaction.amount, transaction.currency)}
         </p>
         <Button
           variant="ghost"
           size="icon"
           onClick={() => onDelete(transaction._id || transaction.id)}
+          className="text-slate-400 hover:text-red-500"
         >
-          <TrashIcon className="h-4 w-4 text-slate-400 hover:text-red-500" />
+          <Trash2Icon className="h-4 w-4" />
         </Button>
       </div>
     </div>
@@ -402,9 +460,11 @@ function TransactionRow({ transaction, accounts, onDelete, style }) {
 function EmptyState({ title, description }) {
   return (
     <div className="text-center py-12">
-      <MagnifyingGlassIcon className="h-12 w-12 text-slate-400 mx-auto mb-4" />
-      <h3 className="text-lg font-semibold mb-2">{title}</h3>
-      <p className="text-slate-600 dark:text-slate-400">{description}</p>
+      <div className="bg-slate-100 dark:bg-slate-800 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4">
+        <SearchIcon className="h-8 w-8 text-slate-400" />
+      </div>
+      <h3 className="text-lg font-semibold text-slate-700 dark:text-slate-300 mb-2">{title}</h3>
+      <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xs mx-auto">{description}</p>
     </div>
   )
 }
@@ -412,19 +472,36 @@ function EmptyState({ title, description }) {
 function TransactionsSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
+      {/* Header */}
+      <div className="flex justify-between items-center">
+        <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse"></div>
+        <div className="h-10 w-32 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
+      </div>
+
+      {/* Filters */}
       <Card>
         <CardContent className="pt-6">
-          <div className="animate-pulse space-y-3">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <div key={i} className="h-16 bg-slate-200 dark:bg-slate-700 rounded-lg"></div>
+          <div className="flex gap-4">
+            <div className="flex gap-2">
+              {[1, 2, 3, 4].map((i) => (
+                <div key={i} className="h-9 w-20 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
+              ))}
+            </div>
+            <div className="flex-1 h-10 bg-slate-200 dark:bg-slate-700 rounded-lg animate-pulse"></div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* List */}
+      <Card>
+        <CardContent className="pt-6">
+          <div className="space-y-3">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded-lg animate-pulse"></div>
             ))}
           </div>
         </CardContent>
       </Card>
     </div>
   )
-}
-
-import { useRef } from 'react'
-import { TrashIcon } from '@heroicons/react/24/outline'
+                   }
