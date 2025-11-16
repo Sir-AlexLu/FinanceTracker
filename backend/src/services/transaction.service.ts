@@ -1,597 +1,180 @@
-import { Transaction, ITransaction } from '../models/Transaction';
-import { Account } from '../models/Account';
-import { AuditLog, AuditAction } from '../models/AuditLog';
-import { AccountService } from './account.service';
-import { BudgetService } from './budget.service'; // ADD THIS
-import { GoalService } from './goal.service'; // ADD THIS
-import { TransactionType, ExpenseCategory } from '../types/models.types';
-import { formatSettlementPeriod } from '../utils/dateHelpers';
-import mongoose from 'mongoose';
+// src/services/transaction.service.ts
+import { Transaction, ITransaction } from '../models/Transaction.js';
+import { Account } from '../models/Account.js';
+import { logger } from '../utils/logger.js';
+import { formatSettlementPeriod } from '../utils/dateHelpers.js';
+import type { TransactionType } from '../types/models.types.js';
 
 export class TransactionService {
-  private accountService: AccountService;
-  private budgetService: BudgetService; // ADD THIS
-  private goalService: GoalService; // ADD THIS
+  private accountService = new import('./account.service.js').AccountService();
+  private budgetService = new import('./budget.service.js').BudgetService();
+  private goalService = new import('./goal.service.js').GoalService();
 
-  constructor() {
-    this.accountService = new AccountService();
-    this.budgetService = new BudgetService(); // ADD THIS
-    this.goalService = new GoalService(); // ADD THIS
-  }
-
-  /**
-   * Create a new transaction
-   */
-  async createTransaction(
-    userId: string,
-    data: {
-      type: TransactionType;
-      incomeCategory?: string;
-      expenseCategory?: string;
-      amount: number;
-      accountId: string;
-      destinationAccountId?: string;
-      description: string;
-      date?: string;
-      notes?: string;
-      tags?: string[];
-      isRecurring?: boolean;
-      recurringConfig?: any;
-    },
-    ipAddress: string,
-    userAgent: string
-  ): Promise<ITransaction> {
+  async create(userId: string, data: CreateTransactionInput, ip: string, ua: string): Promise<ITransaction> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // Verify account ownership
-      const account = await Account.findOne({
-        _id: data.accountId,
-        userId,
-        isActive: true,
-      });
+      const account = await Account.findOne({ _id: data.accountId, userId, isActive: true });
+      if (!account) throw new Error('Account not found');
 
-      if (!account) {
-        throw new Error('Account not found or inactive');
-      }
-
-      // Verify destination account for transfers
       if (data.type === TransactionType.TRANSFER) {
-        const destinationAccount = await Account.findOne({
-          _id: data.destinationAccountId,
-          userId,
-          isActive: true,
-        });
-
-        if (!destinationAccount) {
-          throw new Error('Destination account not found or inactive');
-        }
+        const dest = await Account.findOne({ _id: data.destinationAccountId, userId, isActive: true });
+        if (!dest) throw new Error('Destination account not found');
       }
 
-      // Calculate settlement period
-      const transactionDate = data.date ? new Date(data.date) : new Date();
-      const settlementPeriod = formatSettlementPeriod(transactionDate, 'monthly');
+      const date = data.date ? new Date(data.date) : new Date();
+      const settlement = formatSettlementPeriod(date, 'monthly');
 
-      // Create transaction
-      const transactionData: any = {
+      const tx = await Transaction.create([{
+        ...data,
         userId,
-        type: data.type,
-        incomeCategory: data.incomeCategory,
-        expenseCategory: data.expenseCategory,
-        amount: data.amount,
-        accountId: data.accountId,
-        destinationAccountId: data.destinationAccountId,
-        description: data.description,
-        date: transactionDate,
-        notes: data.notes,
-        tags: data.tags,
-        isRecurring: data.isRecurring || false,
-        recurringConfig: data.recurringConfig,
-        settlementPeriod,
+        date,
+        settlementPeriod: settlement,
         isSettled: false,
-      };
+      }], { session });
 
-      const transaction = await Transaction.create([transactionData], { session });
-
-      // Update account balances
-      await this.updateAccountBalances(transaction[0], 'create', session);
-
+      await this.updateBalances(tx[0], 'create', session);
       await session.commitTransaction();
 
-      // 🔥 NEW: Update budget spending for expense transactions
-      if (
-        transaction[0].type === TransactionType.EXPENSE &&
-        transaction[0].expenseCategory &&
-        !transaction[0].isLiabilityPayment
-      ) {
-        try {
-          await this.budgetService.updateBudgetSpending(
-            userId,
-            transaction[0].expenseCategory as ExpenseCategory,
-            transaction[0].amount,
-            transactionDate
-          );
-        } catch (error: any) {
-          // Log but don't fail transaction if budget update fails
-          console.error('Failed to update budget:', error.message);
-        }
-      }
+      // Async side effects
+      this.updateBudgetAsync(userId, tx[0]);
+      this.updateGoalsAsync(userId, tx[0]);
 
-      // 🔥 NEW: Update goal progress for savings/investment accounts
-      if (
-        transaction[0].type === TransactionType.INCOME ||
-        transaction[0].type === TransactionType.TRANSFER
-      ) {
-        try {
-          // Update goals linked to the affected account
-          await this.updateRelatedGoals(userId, transaction[0].accountId.toString());
-          
-          if (transaction[0].destinationAccountId) {
-            await this.updateRelatedGoals(userId, transaction[0].destinationAccountId.toString());
-          }
-        } catch (error: any) {
-          // Log but don't fail transaction if goal update fails
-          console.error('Failed to update goals:', error.message);
-        }
-      }
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.TRANSACTION_CREATE,
-        resource: 'Transaction',
-        resourceId: transaction[0]._id,
-        details: {
-          type: transaction[0].type,
-          amount: transaction[0].amount,
-          description: transaction[0].description,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 201,
-      });
-
-      return transaction[0];
-    } catch (error: any) {
+      logger.info({ userId, txId: tx[0]._id, type: tx[0].type, amount: tx[0].amount, ip, ua }, 'Transaction created');
+      return tx[0];
+    } catch (err: any) {
       await session.abortTransaction();
-      throw new Error(`Failed to create transaction: ${error.message}`);
+      throw new Error(`Create failed: ${err.message}`);
     } finally {
       session.endSession();
     }
   }
 
-  /**
-   * Update account balances based on transaction
-   */
-  private async updateAccountBalances(
-    transaction: ITransaction,
-    operation: 'create' | 'delete',
-    session?: any
-  ): Promise<void> {
-    const multiplier = operation === 'create' ? 1 : -1;
+  private async updateBalances(tx: ITransaction, op: 'create' | 'delete', session?: any) {
+    const mul = op === 'create' ? 1 : -1;
+    const updates = { $inc: {}, $set: { 'metadata.lastTransactionAt': new Date() } };
 
-    switch (transaction.type) {
+    switch (tx.type) {
       case TransactionType.INCOME:
-        // Increase account balance
-        await Account.findByIdAndUpdate(
-          transaction.accountId,
-          {
-            $inc: { balance: transaction.amount * multiplier },
-            $set: { 'metadata.lastTransactionAt': new Date() },
-          },
-          { session }
-        );
-        break;
-
-      case TransactionType.EXPENSE:
-        // Decrease account balance
-        await Account.findByIdAndUpdate(
-          transaction.accountId,
-          {
-            $inc: { balance: -transaction.amount * multiplier },
-            $set: { 'metadata.lastTransactionAt': new Date() },
-          },
-          { session }
-        );
-        break;
-
-      case TransactionType.TRANSFER:
-        // Decrease source account
-        await Account.findByIdAndUpdate(
-          transaction.accountId,
-          {
-            $inc: { balance: -transaction.amount * multiplier },
-            $set: { 'metadata.lastTransactionAt': new Date() },
-          },
-          { session }
-        );
-
-        // Increase destination account
-        await Account.findByIdAndUpdate(
-          transaction.destinationAccountId,
-          {
-            $inc: { balance: transaction.amount * multiplier },
-            $set: { 'metadata.lastTransactionAt': new Date() },
-          },
-          { session }
-        );
-        break;
-
       case TransactionType.LIABILITY:
-        // Increase account balance (receiving borrowed money)
-        await Account.findByIdAndUpdate(
-          transaction.accountId,
-          {
-            $inc: { balance: transaction.amount * multiplier },
-            $set: { 'metadata.lastTransactionAt': new Date() },
-          },
-          { session }
-        );
+        updates.$inc = { balance: tx.amount * mul };
+        await Account.findByIdAndUpdate(tx.accountId, updates, { session });
+        break;
+      case TransactionType.EXPENSE:
+        updates.$inc = { balance: -tx.amount * mul };
+        await Account.findByIdAndUpdate(tx.accountId, updates, { session });
+        break;
+      case TransactionType.TRANSFER:
+        await Account.findByIdAndUpdate(tx.accountId, { $inc: { balance: -tx.amount * mul }, ...updates.$set }, { session });
+        await Account.findByIdAndUpdate(tx.destinationAccountId, { $inc: { balance: tx.amount * mul }, ...updates.$set }, { session });
         break;
     }
   }
 
-  /**
-   * 🔥 NEW: Update goals related to an account
-   */
-  private async updateRelatedGoals(userId: string, accountId: string): Promise<void> {
-    try {
-      const { Goal } = await import('../models/Goal');
-      
-      // Find goals linked to this account
-      const goals = await Goal.find({
-        userId,
-        linkedAccountId: accountId,
-        status: 'active',
-      });
-
-      // Update each goal's progress
-      for (const goal of goals) {
-        await this.goalService.updateGoalProgress(goal._id.toString());
-      }
-    } catch (error: any) {
-      console.error('Failed to update related goals:', error.message);
+  private updateBudgetAsync(userId: string, tx: ITransaction) {
+    if (tx.type === TransactionType.EXPENSE && tx.expenseCategory && !tx.isLiabilityPayment) {
+      this.budgetService.updateSpending(userId, tx.expenseCategory, tx.amount, tx.date).catch(err =>
+        logger.error({ userId, txId: tx._id, err }, 'Budget update failed'));
     }
   }
 
-  /**
-   * Get transactions with filters
-   */
-  async getTransactions(
-    userId: string,
-    filters: {
-      type?: TransactionType;
-      accountId?: string;
-      startDate?: string;
-      endDate?: string;
-      page?: number;
-      limit?: number;
-    }
-  ): Promise<{ transactions: ITransaction[]; total: number; page: number; totalPages: number }> {
-    try {
-      const query: any = { userId };
+  private updateGoalsAsync(userId: string, tx: ITransaction) {
+    const accounts = [tx.accountId];
+    if (tx.destinationAccountId) accounts.push(tx.destinationAccountId);
 
-      if (filters.type) query.type = filters.type;
-      if (filters.accountId) {
-        query.$or = [
-          { accountId: filters.accountId },
-          { destinationAccountId: filters.accountId },
-        ];
-      }
-      if (filters.startDate || filters.endDate) {
-        query.date = {};
-        if (filters.startDate) query.date.$gte = new Date(filters.startDate);
-        if (filters.endDate) query.date.$lte = new Date(filters.endDate);
-      }
-
-      const page = filters.page || 1;
-      const limit = filters.limit || 20;
-      const skip = (page - 1) * limit;
-
-      const [transactions, total] = await Promise.all([
-        Transaction.find(query)
-          .sort({ date: -1 })
-          .skip(skip)
-          .limit(limit)
-          .populate('accountId', 'name type')
-          .populate('destinationAccountId', 'name type'),
-        Transaction.countDocuments(query),
-      ]);
-
-      return {
-        transactions,
-        total,
-        page,
-        totalPages: Math.ceil(total / limit),
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to fetch transactions: ${error.message}`);
-    }
+    accounts.forEach(id => this.goalService.updateLinkedGoals(userId, id.toString()).catch(err =>
+      logger.error({ userId, accountId: id, err }, 'Goal update failed')));
   }
 
-  /**
-   * Get transaction by ID
-   */
-  async getTransactionById(userId: string, transactionId: string): Promise<ITransaction> {
-    try {
-      const transaction = await Transaction.findOne({
-        _id: transactionId,
-        userId,
-      })
-        .populate('accountId', 'name type')
-        .populate('destinationAccountId', 'name type');
-
-      if (!transaction) {
-        throw new Error('Transaction not found');
-      }
-
-      return transaction;
-    } catch (error: any) {
-      throw new Error(`Failed to fetch transaction: ${error.message}`);
+  async getAll(userId: string, filters: any) {
+    const query: any = { userId };
+    if (filters.type) query.type = filters.type;
+    if (filters.accountId) query.$or = [{ accountId: filters.accountId }, { destinationAccountId: filters.accountId }];
+    if (filters.startDate || filters.endDate) {
+      query.date = {};
+      if (filters.startDate) query.date.$gte = new Date(filters.startDate);
+      if (filters.endDate) query.date.$lte = new Date(filters.endDate);
     }
+
+    const page = filters.page || 1;
+    const limit = Math.min(filters.limit || 20, 100);
+    const skip = (page - 1) * limit;
+
+    const [txs, total] = await Promise.all([
+      Transaction.find(query).sort({ date: -1 }).skip(skip).limit(limit)
+        .populate('accountId', 'name type').populate('destinationAccountId', 'name type'),
+      Transaction.countDocuments(query)
+    ]);
+
+    return { transactions: txs, total, page, totalPages: Math.ceil(total / limit) };
   }
 
-  /**
-   * Update transaction
-   */
-  async updateTransaction(
-    userId: string,
-    transactionId: string,
-    data: {
-      amount?: number;
-      description?: string;
-      date?: string;
-      notes?: string;
-      tags?: string[];
-    },
-    ipAddress: string,
-    userAgent: string
-  ): Promise<ITransaction> {
+  async update(userId: string, id: string, data: UpdateTransactionInput, ip: string, ua: string): Promise<ITransaction> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      const transaction = await Transaction.findOne({
-        _id: transactionId,
-        userId,
-      }).session(session);
+      const tx = await Transaction.findOne({ _id: id, userId }).session(session);
+      if (!tx) throw new Error('Not found');
+      if (tx.isSettled) throw new Error('Cannot update settled transaction');
 
-      if (!transaction) {
-        throw new Error('Transaction not found');
+      const oldAmt = tx.amount;
+
+      if (data.amount && data.amount !== tx.amount) {
+        await this.updateBalances(tx, 'delete', session);
+        tx.amount = data.amount;
+        await this.updateBalances(tx, 'create', session);
       }
 
-      // Check if transaction is already settled
-      if (transaction.isSettled) {
-        throw new Error('Cannot update a settled transaction');
-      }
-
-      const oldAmount = transaction.amount;
-      const oldCategory = transaction.expenseCategory;
-
-      // If amount changed, revert old balance and apply new
-      if (data.amount && data.amount !== transaction.amount) {
-        // Revert old transaction
-        await this.updateAccountBalances(transaction, 'delete', session);
-
-        // Update amount
-        transaction.amount = data.amount;
-
-        // Apply new transaction
-        await this.updateAccountBalances(transaction, 'create', session);
-      }
-
-      // Update other fields
-      if (data.description) transaction.description = data.description;
       if (data.date) {
-        transaction.date = new Date(data.date);
-        transaction.settlementPeriod = formatSettlementPeriod(transaction.date, 'monthly');
+        tx.date = new Date(data.date);
+        tx.settlementPeriod = formatSettlementPeriod(tx.date, 'monthly');
       }
-      if (data.notes !== undefined) transaction.notes = data.notes;
-      if (data.tags) transaction.tags = data.tags;
+      if (data.description) tx.description = data.description;
+      if (data.notes !== undefined) tx.notes = data.notes;
+      if (data.tags) tx.tags = data.tags;
 
-      await transaction.save({ session });
-
+      await tx.save({ session });
       await session.commitTransaction();
 
-      // 🔥 NEW: Update budget if expense amount changed
-      if (
-        transaction.type === TransactionType.EXPENSE &&
-        transaction.expenseCategory &&
-        !transaction.isLiabilityPayment &&
-        data.amount
-      ) {
-        try {
-          // Revert old amount
-          await this.budgetService.updateBudgetSpending(
-            userId,
-            transaction.expenseCategory as ExpenseCategory,
-            -oldAmount,
-            transaction.date
-          );
-          
-          // Add new amount
-          await this.budgetService.updateBudgetSpending(
-            userId,
-            transaction.expenseCategory as ExpenseCategory,
-            transaction.amount,
-            transaction.date
-          );
-        } catch (error: any) {
-          console.error('Failed to update budget:', error.message);
-        }
+      if (data.amount && tx.type === TransactionType.EXPENSE && tx.expenseCategory) {
+        this.budgetService.updateSpending(userId, tx.expenseCategory, -oldAmt, tx.date).catch(() => {});
+        this.budgetService.updateSpending(userId, tx.expenseCategory, tx.amount, tx.date).catch(() => {});
       }
 
-      // 🔥 NEW: Update goals if amount changed
-      if (data.amount) {
-        try {
-          await this.updateRelatedGoals(userId, transaction.accountId.toString());
-          if (transaction.destinationAccountId) {
-            await this.updateRelatedGoals(userId, transaction.destinationAccountId.toString());
-          }
-        } catch (error: any) {
-          console.error('Failed to update goals:', error.message);
-        }
-      }
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.TRANSACTION_UPDATE,
-        resource: 'Transaction',
-        resourceId: transaction._id,
-        details: {
-          changes: data,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-
-      return transaction;
-    } catch (error: any) {
+      logger.info({ userId, txId: id, changes: data, ip, ua }, 'Transaction updated');
+      return tx;
+    } catch (err: any) {
       await session.abortTransaction();
-      throw new Error(`Failed to update transaction: ${error.message}`);
+      throw new Error(`Update failed: ${err.message}`);
     } finally {
       session.endSession();
     }
   }
 
-  /**
-   * Delete transaction
-   */
-  async deleteTransaction(
-    userId: string,
-    transactionId: string,
-    ipAddress: string,
-    userAgent: string
-  ): Promise<void> {
+  async delete(userId: string, id: string, ip: string, ua: string): Promise<void> {
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      const transaction = await Transaction.findOne({
-        _id: transactionId,
-        userId,
-      }).session(session);
+      const tx = await Transaction.findOne({ _id: id, userId }).session(session);
+      if (!tx) throw new Error('Not found');
+      if (tx.isSettled) throw new Error('Cannot delete settled');
 
-      if (!transaction) {
-        throw new Error('Transaction not found');
-      }
-
-      // Check if transaction is already settled
-      if (transaction.isSettled) {
-        throw new Error('Cannot delete a settled transaction');
-      }
-
-      // Revert account balances
-      await this.updateAccountBalances(transaction, 'delete', session);
-
-      // Delete transaction
-      await Transaction.findByIdAndDelete(transactionId).session(session);
-
+      await this.updateBalances(tx, 'delete', session);
+      await Transaction.findByIdAndDelete(id).session(session);
       await session.commitTransaction();
 
-      // 🔥 NEW: Update budget if expense deleted
-      if (
-        transaction.type === TransactionType.EXPENSE &&
-        transaction.expenseCategory &&
-        !transaction.isLiabilityPayment
-      ) {
-        try {
-          await this.budgetService.updateBudgetSpending(
-            userId,
-            transaction.expenseCategory as ExpenseCategory,
-            -transaction.amount,
-            transaction.date
-          );
-        } catch (error: any) {
-          console.error('Failed to update budget:', error.message);
-        }
-      }
+      this.updateBudgetAsync(userId, tx);
+      this.updateGoalsAsync(userId, tx);
 
-      // 🔥 NEW: Update goals
-      try {
-        await this.updateRelatedGoals(userId, transaction.accountId.toString());
-        if (transaction.destinationAccountId) {
-          await this.updateRelatedGoals(userId, transaction.destinationAccountId.toString());
-        }
-      } catch (error: any) {
-        console.error('Failed to update goals:', error.message);
-      }
-
-      // Audit log
-      await AuditLog.log({
-        userId: new mongoose.Types.ObjectId(userId),
-        action: AuditAction.TRANSACTION_DELETE,
-        resource: 'Transaction',
-        resourceId: transaction._id,
-        details: {
-          type: transaction.type,
-          amount: transaction.amount,
-          description: transaction.description,
-        },
-        ipAddress,
-        userAgent,
-        statusCode: 200,
-      });
-    } catch (error: any) {
+      logger.info({ userId, txId: id, ip, ua }, 'Transaction deleted');
+    } catch (err: any) {
       await session.abortTransaction();
-      throw new Error(`Failed to delete transaction: ${error.message}`);
+      throw new Error(`Delete failed: ${err.message}`);
     } finally {
       session.endSession();
-    }
-  }
-
-  /**
-   * Get transaction statistics
-   */
-  async getTransactionStats(
-    userId: string,
-    startDate: Date,
-    endDate: Date
-  ): Promise<{
-    totalIncome: number;
-    totalExpenses: number;
-    totalTransfers: number;
-    netCashFlow: number;
-    transactionCount: number;
-  }> {
-    try {
-      const transactions = await Transaction.find({
-        userId,
-        date: { $gte: startDate, $lte: endDate },
-      });
-
-      let totalIncome = 0;
-      let totalExpenses = 0;
-      let totalTransfers = 0;
-
-      transactions.forEach((transaction) => {
-        switch (transaction.type) {
-          case TransactionType.INCOME:
-            totalIncome += transaction.amount;
-            break;
-          case TransactionType.EXPENSE:
-            if (!transaction.isLiabilityPayment) {
-              totalExpenses += transaction.amount;
-            }
-            break;
-          case TransactionType.TRANSFER:
-            totalTransfers += transaction.amount;
-            break;
-        }
-      });
-
-      return {
-        totalIncome,
-        totalExpenses,
-        totalTransfers,
-        netCashFlow: totalIncome - totalExpenses,
-        transactionCount: transactions.length,
-      };
-    } catch (error: any) {
-      throw new Error(`Failed to get transaction stats: ${error.message}`);
     }
   }
 }
