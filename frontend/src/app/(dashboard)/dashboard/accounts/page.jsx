@@ -1,26 +1,36 @@
-// src/app/(dashboard)/dashboard/accounts/page.jsx
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useForm } from 'react-hook-form'
 import { accountsAPI } from '@/lib/api-safe'
 import { toast } from '@/hooks/useToast'
 import { formatCurrency } from '@/lib/utils'
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/atoms/Card'
+import { Card, CardContent } from '@/components/atoms/Card'
 import { Button } from '@/components/atoms/Button'
 import { Input } from '@/components/atoms/Input'
+import { useVirtual } from '@tanstack/react-virtual'
 import { 
   WalletIcon, PlusIcon, PencilIcon, TrashIcon, 
-  CurrencyDollarIcon, BanknotesIcon, ChartBarIcon,
-  CheckIcon, XMarkIcon
-} from '@heroicons/react/24/outline'
-import { useVirtual } from '@tanstack/react-virtual'
+  DollarSignIcon, LandmarkIcon, TrendingUpIcon,
+  CheckIcon, XMarkIcon, AlertTriangleIcon
+} from 'lucide-react'
+
+// Animation variants
+const containerVariants = {
+  hidden: { opacity: 0 },
+  visible: {
+    opacity: 1,
+    transition: {
+      staggerChildren: 0.1
+    }
+  }
+}
 
 const accountTypes = [
-  { value: 'cash', label: 'Cash', icon: CurrencyDollarIcon, color: 'bg-green-500' },
-  { value: 'bank', label: 'Bank', icon: BanknotesIcon, color: 'bg-blue-500' },
-  { value: 'investment', label: 'Investment', icon: ChartBarIcon, color: 'bg-purple-500' },
+  { value: 'cash', label: 'Cash', icon: DollarSignIcon, color: 'bg-green-500' },
+  { value: 'bank', label: 'Bank', icon: LandmarkIcon, color: 'bg-blue-500' },
+  { value: 'investment', label: 'Investment', icon: TrendingUpIcon, color: 'bg-purple-500' },
 ]
 
 export default function AccountsPage() {
@@ -49,12 +59,12 @@ export default function AccountsPage() {
 
   const selectedType = watch('type')
 
-  // Virtualization for large account lists
+  // Virtualization setup
   const parentRef = useRef(null)
   const virtualizer = useVirtual({
-    count: accounts.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 120,
+    size: accounts.length,
+    parentRef,
+    estimateSize: () => 140,
     overscan: 5,
   })
 
@@ -66,7 +76,7 @@ export default function AccountsPage() {
     setIsLoading(true)
     const response = await accountsAPI.getAll()
     
-    if (response.success) {
+    if (response.success, response.success) {
       setAccounts(response.data.accounts || [])
     } else {
       toast.error('Failed to load accounts')
@@ -88,7 +98,7 @@ export default function AccountsPage() {
       await loadAccounts()
       handleCancel()
     } else {
-      toast.error(response.error)
+      toast.error(response.error || 'Operation failed')
     }
     setIsLoading(false)
   }
@@ -106,7 +116,7 @@ export default function AccountsPage() {
 
   const handleDelete = async (id) => {
     setDeleteId(id)
-    const confirmed = confirm('Delete this account? All transactions will also be deleted.')
+    const confirmed = window.confirm('Delete this account? All transactions will also be deleted.')
     
     if (confirmed) {
       setIsLoading(true)
@@ -116,7 +126,7 @@ export default function AccountsPage() {
         toast.success('Account deleted')
         await loadAccounts()
       } else {
-        toast.error(response.error)
+        toast.error(response.error || 'Failed to delete')
       }
       setIsLoading(false)
     }
@@ -192,7 +202,9 @@ export default function AccountsPage() {
                                   : 'border-border hover:border-accent'
                               }`}
                             >
-                              <Icon className={`h-6 w-6 mx-auto mb-1 ${type.color} text-white rounded-lg p-1`} />
+                              <div className={`h-8 w-8 mx-auto mb-1 ${type.color} rounded-lg p-1 flex items-center justify-center`}>
+                                <Icon className="h-5 w-5 text-white" />
+                              </div>
                               <p className="text-xs font-medium">{type.label}</p>
                             </motion.button>
                           )
@@ -207,7 +219,8 @@ export default function AccountsPage() {
                       error={errors.balance?.message}
                       {...register('balance', { 
                         required: 'Balance is required',
-                        min: { value: 0, message: 'Balance cannot be negative' }
+                        min: { value: 0, message: 'Balance cannot be negative' },
+                        valueAsNumber: true
                       })}
                       placeholder="0.00"
                       disabled={isLoading}
@@ -264,15 +277,15 @@ export default function AccountsPage() {
             onClick={() => setShowForm(true)}
           />
         ) : (
-          <div ref={parentRef} className="h-[600px] overflow-y-auto scrollbar-hide">
+          <div ref={parentRef} className="h-[600px] overflow-y-auto scrollbar-hide border rounded-lg">
             <div
               style={{
-                height: `${virtualizer.getTotalSize()}px`,
+                height: `${virtualizer.totalSize}px`,
                 width: '100%',
                 position: 'relative',
               }}
             >
-              {virtualizer.getVirtualItems().map((virtualItem) => {
+              {virtualizer.virtualItems.map((virtualItem) => {
                 const account = accounts[virtualItem.index]
                 return (
                   <motion.div
@@ -289,6 +302,7 @@ export default function AccountsPage() {
                       height: `${virtualItem.size}px`,
                       transform: `translateY(${virtualItem.start}px)`,
                     }}
+                    className="px-1"
                   >
                     <AccountCard
                       account={account}
@@ -314,8 +328,8 @@ function AccountCard({ account, onEdit, onDelete, isDeleting }) {
   const color = accountType?.color
 
   return (
-    <Card className="mb-4">
-      <CardContent className="pt-6">
+    <Card className="mb-4 h-full">
+      <CardContent className="pt-6 h-full">
         <div className="flex items-start justify-between mb-4">
           <div className="flex items-center gap-3">
             <div className={`h-12 w-12 rounded-xl ${color} flex items-center justify-center`}>
@@ -353,7 +367,7 @@ function AccountCard({ account, onEdit, onDelete, isDeleting }) {
         <div className="border-t border-border pt-4">
           <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Balance</p>
           <p className="text-2xl font-bold text-slate-900 dark:text-white">
-            {formatCurrency(account.balance)}
+            {formatCurrency(account.balance, account.currency)}
           </p>
         </div>
 
@@ -365,7 +379,7 @@ function AccountCard({ account, onEdit, onDelete, isDeleting }) {
 
         {parseFloat(account.balance) < 100 && (
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg flex items-start gap-2 dark:bg-yellow-900/10 dark:border-yellow-800">
-            <ExclamationTriangleIcon className="h-5 w-5 text-yellow-600 mt-0.5" />
+            <AlertTriangleIcon className="h-5 w-5 text-yellow-600 mt-0.5 flex-shrink-0" />
             <p className="text-sm text-yellow-800 dark:text-yellow-200">Low balance warning</p>
           </div>
         )}
@@ -392,18 +406,23 @@ function EmptyState({ title, description, action, onClick }) {
 function AccountsSkeleton() {
   return (
     <div className="space-y-6">
-      <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-48"></div>
-      <div className="grid grid-cols-1 gap-4">
+      <div className="h-10 bg-slate-200 dark:bg-slate-700 rounded w-48 animate-pulse"></div>
+      <div className="space-y-4">
         {[1, 2, 3].map((i) => (
           <Card key={i}>
             <CardContent className="pt-6">
               <div className="animate-pulse space-y-4">
-                <div className="flex justify-between">
-                  <div className="h-12 w-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
-                  <div className="h-8 w-20 bg-slate-200 dark:bg-slate-700 rounded"></div>
+                <div className="flex justify-between items-start">
+                  <div className="flex items-center gap-3">
+                    <div className="h-12 w-12 bg-slate-200 dark:bg-slate-700 rounded-xl"></div>
+                    <div>
+                      <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-32"></div>
+                      <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-20 mt-2"></div>
+                    </div>
+                  </div>
+                  <div className="h-8 w-16 bg-slate-200 dark:bg-slate-700 rounded"></div>
                 </div>
-                <div className="h-6 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
-                <div className="h-4 bg-slate-200 dark:bg-slate-700 rounded w-1/2"></div>
+                <div className="h-8 bg-slate-200 dark:bg-slate-700 rounded w-24"></div>
               </div>
             </CardContent>
           </Card>
@@ -411,7 +430,4 @@ function AccountsSkeleton() {
       </div>
     </div>
   )
-}
-
-import { useRef } from 'react'
-import { ExclamationTriangleIcon, InformationCircleIcon } from '@heroicons/react/24/outline'
+    }
