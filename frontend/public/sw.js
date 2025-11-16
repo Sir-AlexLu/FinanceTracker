@@ -22,14 +22,13 @@ self.addEventListener('fetch', (event) => {
       }
       
       return fetch(event.request).then((response) => {
-        // Don't cache API requests
-        if (event.request.url.includes('/api/')) {
+        if (!response || response.status !== 200 || response.type !== 'basic') {
           return response
         }
         
-        const responseClone = response.clone()
+        const responseToCache = response.clone()
         caches.open(CACHE_NAME).then((cache) => {
-          cache.put(event.request, responseClone)
+          cache.put(event.request, responseToCache)
         })
         
         return response
@@ -39,20 +38,6 @@ self.addEventListener('fetch', (event) => {
         }
         return new Response('Offline', { status: 503 })
       })
-    })
-  )
-})
-
-self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames.map((cacheName) => {
-          if (cacheName !== CACHE_NAME) {
-            return caches.delete(cacheName)
-          }
-        })
-      )
     })
   )
 })
