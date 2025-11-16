@@ -1,8 +1,6 @@
-'use client'
-
 import { Inter, Space_Grotesk } from 'next/font/google'
-import { Toaster } from 'react-hot-toast'
 import './globals.css'
+import ClientProviders from './ClientProviders'
 
 const inter = Inter({
   subsets: ['latin'],
@@ -16,28 +14,12 @@ const spaceGrotesk = Space_Grotesk({
   display: 'swap',
 })
 
+// ← Metadata is allowed here (Server Component)
 export const metadata = {
   title: 'Finance Tracker',
   description: 'Master your money with style',
   viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
   themeColor: '#3b82f6',
-}
-
-function ClientWrapper({ children }: { children: React.ReactNode }) {
-  return (
-    <>
-      <main className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700">
-        {children}
-      </main>
-      <Toaster
-        position="top-center"
-        toastOptions={{
-          duration: 4000,
-          className: 'glass-neumorph',
-        }}
-      />
-    </>
-  )
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
@@ -47,7 +29,11 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         <link rel="icon" href="/favicon.ico" sizes="any" />
       </head>
       <body className={`${inter.variable} ${spaceGrotesk.variable} font-sans`}>
-        <ClientWrapper>{children}</ClientWrapper>
+        <ClientProviders>
+          <main className="min-h-screen bg-gradient-to-br from-slate-50 via-primary-50 to-purple-50 dark:from-slate-900 dark:via-slate-800 dark:to-slate-700">
+            {children}
+          </main>
+        </ClientProviders>
       </body>
     </html>
   )
